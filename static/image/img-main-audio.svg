@@ -1,0 +1,35 @@
+<svg width="417" height="417" viewBox="0 0 417 417" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g opacity="0.3" filter="url(#filter0_f_1460_3570)">
+<rect x="83.2119" y="82.8811" width="250" height="250" rx="56.8182" transform="rotate(0.0759616 83.2119 82.8811)" fill="url(#paint0_linear_1460_3570)"/>
+</g>
+<g filter="url(#filter1_d_1460_3570)">
+<mask id="path-2-inside-1_1460_3570" fill="white">
+<path d="M83.3682 207.678C83.3682 138.643 139.333 82.6781 208.368 82.6781C277.404 82.6781 333.368 138.643 333.368 207.678C333.368 276.714 277.404 332.678 208.368 332.678C139.333 332.678 83.3682 276.714 83.3682 207.678Z"/>
+</mask>
+<path d="M83.3682 207.678C83.3682 138.643 139.333 82.6781 208.368 82.6781C277.404 82.6781 333.368 138.643 333.368 207.678C333.368 276.714 277.404 332.678 208.368 332.678C139.333 332.678 83.3682 276.714 83.3682 207.678Z" fill="white" fill-opacity="0.05" shape-rendering="crispEdges"/>
+<path d="M83.3682 207.678M333.368 207.678M333.368 207.678M83.3682 207.678M208.368 82.6781M333.368 207.678M208.368 332.678M83.3682 207.678M208.368 332.678V331.934C139.743 331.934 84.1122 276.303 84.1122 207.678H83.3682H82.6241C82.6241 277.125 138.922 333.422 208.368 333.422V332.678ZM333.368 207.678H332.624C332.624 276.303 276.993 331.934 208.368 331.934V332.678V333.422C277.815 333.422 334.112 277.125 334.112 207.678H333.368ZM208.368 82.6781V83.4221C276.993 83.4221 332.624 139.053 332.624 207.678H333.368H334.112C334.112 138.232 277.815 81.9341 208.368 81.9341V82.6781ZM208.368 82.6781V81.9341C138.922 81.9341 82.6241 138.232 82.6241 207.678H83.3682H84.1122C84.1122 139.053 139.743 83.4221 208.368 83.4221V82.6781Z" fill="white" fill-opacity="0.1" mask="url(#path-2-inside-1_1460_3570)"/>
+<path d="M180.467 211.383H189.798C191.448 211.383 193.031 212.023 194.197 213.163C195.364 214.302 196.019 215.848 196.019 217.459V226.574C196.019 228.185 195.364 229.731 194.197 230.871C193.031 232.01 191.448 232.65 189.798 232.65H186.688C185.038 232.65 183.456 232.01 182.289 230.871C181.122 229.731 180.467 228.185 180.467 226.574V205.307C180.467 198.055 183.416 191.1 188.666 185.972C193.916 180.844 201.037 177.963 208.462 177.963C215.886 177.963 223.007 180.844 228.257 185.972C233.507 191.1 236.456 198.055 236.456 205.307V226.574C236.456 228.185 235.801 229.731 234.634 230.871C233.468 232.01 231.885 232.65 230.235 232.65H227.125C225.475 232.65 223.892 232.01 222.726 230.871C221.559 229.731 220.904 228.185 220.904 226.574V217.459C220.904 215.848 221.559 214.302 222.726 213.163C223.892 212.023 225.475 211.383 227.125 211.383H236.456" stroke="#E8E8E9" stroke-width="5.20833" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<defs>
+<filter id="filter0_f_1460_3570" x="-0.0755005" y="-0.0752563" width="416.244" height="416.244" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="41.4782" result="effect1_foregroundBlur_1460_3570"/>
+</filter>
+<filter id="filter1_d_1460_3570" x="33.889" y="65.751" width="348.958" height="348.958" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feMorphology radius="15.625" operator="erode" in="SourceAlpha" result="effect1_dropShadow_1460_3570"/>
+<feOffset dy="32.5521"/>
+<feGaussianBlur stdDeviation="32.5521"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1460_3570"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1460_3570" result="shape"/>
+</filter>
+<linearGradient id="paint0_linear_1460_3570" x1="83.2119" y1="332.881" x2="333.212" y2="82.8811" gradientUnits="userSpaceOnUse">
+<stop stop-color="#2B7FFF"/>
+<stop offset="1" stop-color="#AD46FF"/>
+</linearGradient>
+</defs>
+</svg>

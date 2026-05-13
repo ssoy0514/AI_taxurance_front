@@ -1,0 +1,77 @@
+@import './fonts.scss';
+@import './base.scss';
+@import './layout.scss';
+
+html {
+  font-size: 100%;
+  body {
+    min-width: 320px;
+  }
+  .pc-show {
+    display: block;
+  }
+  .m-show {
+    display: none;
+  }
+}
+
+@media (max-width: 1280px) {
+  html {
+    font-size: 95%;
+  }
+}
+
+@media (max-width: 1024px) {
+  html {
+    font-size: 90%;
+  }
+}
+
+@media (max-width: 768px) {
+  html {
+    font-size: 85%;
+    .pc-show {
+      display: none !important;
+    }
+    .m-show {
+      display: block !important;
+    }
+  }
+}
+
+@media (max-width: 512px) {
+  html {
+    font-size: 75%;
+  }
+}
+
+@media (max-width: 384px) {
+  html {
+    font-size: 65%;
+  }
+}
+
+/* 오디오 플레이어 전용 커스텀 */
+:root {
+  /* 포인트 컬러 (재생바, 버튼 활성화 등) */
+  --plyr-color-main: #6c5ce7;
+  --plyr-control-spacing: 10px;
+  --plyr-control-radius: 20px;
+
+  /* 오디오 컨트롤 배경색 */
+  --plyr-audio-controls-background: transparent;
+
+  /* 제어 버튼 색상 */
+  --plyr-audio-control-color: #666;
+
+  /* 호버 시 버튼 색상 */
+  // --plyr-audio-control-color-hover: #fff;
+  // --plyr-audio-control-background: #155dfc;
+  // --plyr-audio-control-background-hover: #155dfc;
+
+  /* 진행 바(Progress Bar) 관련 */
+  --plyr-range-track-height: 4px;
+  // --plyr-range-fill-background: #155dfc;
+
+  --plyr-control-icon-size: 14px; // 아이콘 크기
+}

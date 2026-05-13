@@ -1,0 +1,5 @@
+include:
+  - project: Common/app000624
+    ref: main
+    file: 
+      - asp-fc-search-front.yml

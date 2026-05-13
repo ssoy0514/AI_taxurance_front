@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "es2019",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "lib": ["es2020", "dom"],
+    "types": ["@nuxt/types", "@types/node"],
+    "allowJs": true,
+    "checkJs": false,
+    "strict": false,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": { "~/*": ["./*"], "@/*": ["./*"] },
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["**/*.ts", "**/*.vue", "types/**/*.d.ts"],
+  "exclude": ["node_modules", ".nuxt", "dist"]
+}
