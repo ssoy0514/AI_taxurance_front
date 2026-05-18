@@ -132,6 +132,7 @@ export default {
             >
               <button
                 v-for="(v, i) in item?.videos"
+                :key="i"
                 class="btn-play"
                 @click="viewVideo(v)"
               >
@@ -145,6 +146,7 @@ export default {
             >
               <button
                 v-for="(a, i) in item?.audios"
+                :key="i"
                 class="btn-play"
                 @click="viewAudio(a)"
               >

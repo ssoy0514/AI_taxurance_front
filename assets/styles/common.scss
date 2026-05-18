@@ -489,6 +489,15 @@ $colorInfo: rgb(55, 154, 230); //#379ae6
 .icon-file-lines:before {
   @include maskImages('icon-file-lines.svg');
 }
+.icon-eye:before {
+  @include maskImages('icon-eye.svg');
+}
+.icon-like:before {
+  @include maskImages('icon-like.svg');
+}
+.icon-dislike:before {
+  @include maskImages('icon-dislike.svg');
+}
 
 /************************************************
 	text style

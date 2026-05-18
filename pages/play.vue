@@ -4,6 +4,7 @@ import Video from '@/components/Video.vue'
 import Audio from '@/components/Audio.vue'
 import Link from '@/components/Link.vue'
 import Kollus from '~/components/Kollus.vue'
+import { AudioList } from '@/utils/mockApi'
 
 export default {
   name: 'play',
@@ -46,16 +47,28 @@ export default {
   methods: {
     // 리스트 호출
     async fetchList() {
-      const { infos, succ } = await this.$axios.post('/contents/list', {
-        ext_type: this.$route.query.type,
-      })
-      if (succ) {
-        this.list = infos
-      }
+      this.list = AudioList()
+
+      // const { infos, succ } = await this.$axios.post('/contents/list', {
+      //   ext_type: this.$route.query.type,
+      // })
+      // if (succ) {
+      //   this.list = infos
+      // }
     },
     setTab(tab) {
       this.selectedTab = tab
       this.showFilter = false
+    },
+    formatViews(count) {
+      if (!count) return 0
+      if (count >= 1000000) {
+        return (count / 1000000).toFixed(1) + 'M'
+      }
+      if (count >= 1000) {
+        return (count / 1000).toFixed(1) + 'K'
+      }
+      return count
     },
   },
 }
@@ -70,13 +83,18 @@ export default {
               <Kollus :id="currentVideo?.object_id"></Kollus>
             </div>
             <div class="view-info">
-              <p>{{ currentVideo?.views }}</p>
-              <button>
+              <p class="view-count">
+                <i class="icon-m icon-eye"></i
+                >{{ formatViews(currentVideo?.views) }}
+              </p>
+              <!-- <button>
+                <i class="icon-m icon-like"></i>
                 {{ currentVideo?.likes }}
               </button>
               <button>
+                <i class="icon-m icon-dislike"></i>
                 {{ currentVideo?.dislikes }}
-              </button>
+              </button> -->
             </div>
             <div class="view-text scroll-y">
               <p>{{ currentVideo?.title }}</p>
@@ -170,6 +188,28 @@ export default {
     }
     .view-info {
       @include flexbox(flex-end);
+      padding: rem(20);
+      gap: rem(24);
+      .view-count {
+        @include flexbox();
+        gap: 8px;
+        color: #364153;
+        font-size: 14px;
+        i:before {
+          background-color: #364153;
+        }
+      }
+      button {
+        @include flexbox();
+        gap: 8px;
+        padding: rem(8) rem(16);
+        border-radius: 15px;
+        background-color: #f3f4f6;
+        font-size: 14px;
+        i:before {
+          background-color: #364153;
+        }
+      }
     }
   }
   .sec-list {
@@ -239,7 +279,7 @@ export default {
 
 .view-text {
   flex: 1;
-  padding: rem(40) 0 rem(20);
+  padding: rem(20) 0;
   p {
     &:nth-child(1) {
       color: #101828;
