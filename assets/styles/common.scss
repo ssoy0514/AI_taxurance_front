@@ -498,6 +498,18 @@ $colorInfo: rgb(55, 154, 230); //#379ae6
 .icon-dislike:before {
   @include maskImages('icon-dislike.svg');
 }
+.icon-repeat:before {
+  @include maskImages('icon-repeat.svg');
+}
+.icon-play-all:before {
+  @include maskImages('icon-play-all.svg');
+}
+.icon-mic:before {
+  @include maskImages('icon-mic.svg');
+}
+.icon-stop:before {
+  @include maskImages('icon-stop.svg');
+}
 
 /************************************************
 	text style

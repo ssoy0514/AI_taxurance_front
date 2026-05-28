@@ -51,9 +51,39 @@ export const getters = {
 
 export const actions: ActionTree<any, any> = {
   // SSR 진입 시 1회 실행
-  async nuxtServerInit({ commit }, { req, $axios }: Context) {
+  async nuxtServerInit({ commit }, { req, app, $axios }: Context) {
     const headers = req && req.headers ? req.headers : {}
     console.log('[headers]', JSON.stringify(headers, null, 2))
+
+    let userToken = null
+    let devicetype = null
+
+    try {
+      // 1. 기본 제공되는 쿠키 모듈 사용 시도
+      userToken = app.$cookies.get('userToken')
+      devicetype = app.$cookies.get('devicetype')
+    } catch (e) {
+      console.warn('[Cookie Module Access Failed] Attempting manual parse...')
+    }
+
+    // 2. 대체 코드 (Fallback): 모듈이 실패하거나 값이 없는 경우 헤더에서 직접 추출
+    if (!userToken || !devicetype) {
+      const rawCookie = req?.headers?.cookie || ''
+      const cookieMap: Record<string, string> = {}
+      rawCookie.split(';').forEach((item) => {
+        const [key, value] = item.split('=')
+        if (key) cookieMap[key.trim()] = decodeURIComponent(value || '').trim()
+      })
+      userToken = userToken || cookieMap['userToken'] || null
+      devicetype = devicetype || cookieMap['devicetype'] || 'pc'
+    }
+
+    // 최종 값 확정 (기본값 적용)
+    userToken = userToken || null
+    devicetype = devicetype || 'pc'
+
+    console.log('[userToken]', userToken)
+    console.log('[devicetype]', devicetype)
 
     // 이름 디코딩
     const decodeName = (val: any): string | null => {

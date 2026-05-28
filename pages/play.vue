@@ -4,7 +4,7 @@ import Video from '@/components/Video.vue'
 import Audio from '@/components/Audio.vue'
 import Link from '@/components/Link.vue'
 import Kollus from '~/components/Kollus.vue'
-import { AudioList } from '@/utils/mockApi'
+import { VideoList } from '@/utils/mockApi'
 
 export default {
   name: 'play',
@@ -15,6 +15,8 @@ export default {
       list: [],
       selectedTab: '전체',
       showFilter: false,
+      isRepeat: false,
+      isPlayAll: true,
     }
   },
   computed: {
@@ -47,7 +49,7 @@ export default {
   methods: {
     // 리스트 호출
     async fetchList() {
-      this.list = AudioList()
+      this.list = VideoList()
 
       // const { infos, succ } = await this.$axios.post('/contents/list', {
       //   ext_type: this.$route.query.type,
@@ -59,6 +61,36 @@ export default {
     setTab(tab) {
       this.selectedTab = tab
       this.showFilter = false
+    },
+    toggleRepeat() {
+      this.isRepeat = !this.isRepeat
+      if (this.isRepeat) {
+        this.isPlayAll = false
+      }
+    },
+    togglePlayAll() {
+      this.isPlayAll = !this.isPlayAll
+      if (this.isPlayAll) {
+        this.isRepeat = false
+      }
+    },
+    playNext() {
+      const currentIndex = this.list.findIndex(
+        (item) => item.object_id === this.currentVideo?.object_id
+      )
+      if (currentIndex > -1 && currentIndex < this.list.length - 1) {
+        const nextItem = this.list[currentIndex + 1]
+
+        console.log(nextItem)
+        this.$router.push({
+          name: 'play',
+          query: {
+            type: this.$route.query.type,
+            tab: nextItem.tags[0],
+            id: nextItem.object_id,
+          },
+        })
+      }
     },
     formatViews(count) {
       if (!count) return 0
@@ -80,9 +112,22 @@ export default {
         <section class="sec-view">
           <div class="sec-view-inner">
             <div class="view-video">
-              <Kollus :id="currentVideo?.object_id"></Kollus>
+              <Kollus
+                :key="currentVideo?.object_id"
+                :id="currentVideo?.object_id"
+                :src="currentVideo?.src"
+                :isRepeat="isRepeat"
+                :isPlayAll="isPlayAll"
+                @play-next="playNext"
+              ></Kollus>
             </div>
             <div class="view-info">
+              <button :class="{ active: isRepeat }" @click="toggleRepeat">
+                <i class="icon-m icon-repeat"></i>반복재생
+              </button>
+              <button :class="{ active: isPlayAll }" @click="togglePlayAll">
+                <i class="icon-m icon-play-all"></i>연속재생
+              </button>
               <p class="view-count">
                 <i class="icon-m icon-eye"></i
                 >{{ formatViews(currentVideo?.views) }}
@@ -208,6 +253,13 @@ export default {
         font-size: 14px;
         i:before {
           background-color: #364153;
+        }
+        &.active {
+          background-color: #101828;
+          color: #fff;
+          i:before {
+            background-color: #fff;
+          }
         }
       }
     }

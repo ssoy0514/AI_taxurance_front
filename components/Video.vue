@@ -1,4 +1,6 @@
 <script>
+import moment from 'moment'
+
 export default {
   props: {
     video: {},
@@ -23,6 +25,12 @@ export default {
     showPopup(item) {
       this.$emit('show-popup')
     },
+    checkIsNew(createdAt) {
+      console.log('createdAt', createdAt)
+      if (!createdAt) return false
+      const diffDays = moment().diff(moment(createdAt), 'days')
+      return diffDays >= 0 && diffDays <= 14
+    },
   },
 }
 </script>
@@ -38,9 +46,14 @@ export default {
       <i class="icon-s icon-play"></i>
     </div>
     <div class="text">
-      <p class="tags">
-        <span v-for="(t, index) in video?.tags" :key="index">{{ t }}</span>
-      </p>
+      <div class="tags-new">
+        <p class="tags">
+          <span v-for="(t, index) in video?.tags" :key="index" class="tag">{{
+            t
+          }}</span>
+        </p>
+        <span v-if="checkIsNew(video?.created_at)" class="badge-new">N</span>
+      </div>
       <p class="txt ellipsis-oneline">
         {{ video?.title }}
       </p>
@@ -89,16 +102,33 @@ export default {
     }
   }
   .text {
+    flex: 1;
     @include flexbox(flex-start, flex-start);
     flex-direction: column;
     gap: 6px;
-    .tags {
-      span {
-        margin-right: 4px;
-        padding: rem(2) rem(10);
-        border-radius: 4px;
-        background-color: #f1f1f1;
-        font-size: 13px;
+    .tags-new {
+      @include flexbox(space-between, baseline);
+      width: 100%;
+      .tags {
+        @include flexbox(flex-start, center);
+        flex-wrap: wrap;
+        gap: 4px;
+        .tag {
+          padding: rem(2) rem(10);
+          border-radius: 4px;
+          background-color: #f1f1f1;
+          font-size: 13px;
+        }
+      }
+      .badge-new {
+        @include flexbox(center, center);
+        width: 18px;
+        height: 18px;
+        background-color: #eb507b;
+        border-radius: 50%;
+        color: #fff;
+        font-size: 10px;
+        line-height: 15px;
       }
     }
     .txt {

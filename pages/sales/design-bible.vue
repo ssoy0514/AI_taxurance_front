@@ -585,6 +585,7 @@ export default {
                       <div>
                         <button
                           v-for="(trans, idx) in transOptions"
+                          :key="idx"
                           class="btn-s btn-gray"
                           @click="startTransStreaming(trans, msg)"
                         >
@@ -635,13 +636,16 @@ export default {
               ref="textareaRef"
               placeholder="생성된 화법에서 수정 필요한게 있으신가요?"
             />
-            <button
-              class="btn-send"
-              @click="handleClickSend"
-              :disabled="!text.trim()"
-            >
-              <i class="icon-s icon-arrow-right"></i>
-            </button>
+            <div class="wrap-btn">
+              <button
+                class="btn-send"
+                :class="{ active: text.trim() }"
+                @click="handleClickSend"
+                :disabled="!text.trim()"
+              >
+                <i class="icon-s icon-arrow-right"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>

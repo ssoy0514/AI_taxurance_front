@@ -3,6 +3,7 @@ import RightView from '@/components/RightView.vue'
 import Video from '@/components/Video.vue'
 import Link from '@/components/Link.vue'
 import RecommendSection from '@/components/RecommendSection.vue'
+import { VideoList } from '@/utils/mockApi'
 
 export default {
   name: 'podcast',
@@ -38,12 +39,13 @@ export default {
   methods: {
     // 리스트 호출
     async fetchList() {
-      const { infos, succ } = await this.$axios.post('/contents/list', {
-        ext_type: 'videos',
-      })
-      if (succ) {
-        this.list = infos
-      }
+      this.list = VideoList()
+      // const { infos, succ } = await this.$axios.post('/contents/list', {
+      //   ext_type: 'videos',
+      // })
+      // if (succ) {
+      //   this.list = infos
+      // }
     },
 
     // 리스트 호출

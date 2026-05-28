@@ -6,8 +6,7 @@ import Link from '@/components/Link.vue'
 import Video from '@/components/Video.vue'
 import Images from '@/components/Images.vue'
 import CounselingComment from '@/components/CounselingComment.vue'
-import { template } from 'lodash'
-import { duration } from 'moment'
+import { PrdList } from '~/utils/mockApi'
 
 export default {
   name: 'ProductInfo',
@@ -26,6 +25,8 @@ export default {
       messages: [], // { role: 'user' | 'assistant', content: string }
       isPrdList: false,
       width: 0,
+      isListening: false,
+      recognition: null,
     }
   },
   computed: {
@@ -87,6 +88,7 @@ export default {
   },
   beforeDestroy() {
     this.stopStreaming()
+    this.stopSpeechRecognition()
     this.toggleRelatedDataMapping(false)
     window.removeEventListener('resize', this.setWidth)
   },
@@ -96,16 +98,70 @@ export default {
         this.width = window.innerWidth
       })
     },
+    // 음성 인식 초기화 및 시작/중지 토글
+    toggleSpeech() {
+      if (this.isListening) {
+        this.stopSpeechRecognition()
+        return
+      }
+      this.startSpeechRecognition()
+    },
+    startSpeechRecognition() {
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition
+      if (!SpeechRecognition) {
+        alert(
+          '이 브라우저는 음성 인식을 지원하지 않습니다. 크롬 또는 엣지 브라우저를 사용해 주세요.'
+        )
+        return
+      }
+
+      if (!this.recognition) {
+        this.recognition = new SpeechRecognition()
+        this.recognition.lang = 'ko-KR'
+        this.recognition.continuous = false
+        this.recognition.interimResults = false
+
+        this.recognition.onstart = () => {
+          this.isListening = true
+        }
+
+        this.recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript
+          this.text = (this.text + ' ' + transcript).trim()
+          this.autoResize()
+        }
+
+        this.recognition.onerror = (event) => {
+          console.error('Speech recognition error:', event.error)
+          this.stopSpeechRecognition()
+        }
+
+        this.recognition.onend = () => {
+          this.isListening = false
+        }
+      }
+
+      this.recognition.start()
+    },
+    stopSpeechRecognition() {
+      if (this.recognition) {
+        this.recognition.stop()
+      }
+      this.isListening = false
+    },
     renderMarkdown, // 그대로 사용
 
     // 상품 리스트 호출
     async fetchPrdList() {
-      const { products, succ } = await this.$axios.get(
-        '/product/compass/data/all'
-      )
-      if (succ) {
-        this.productList = products
-      }
+      this.productList = PrdList()
+
+      // const { products, succ } = await this.$axios.get(
+      //   '/product/compass/data/all'
+      // )
+      // if (succ) {
+      //   this.productList = products
+      // }
     },
 
     // 스트리밍 시작
@@ -410,16 +466,35 @@ export default {
               @input="autoResize"
               @keydown="handleKeyDown"
               ref="textareaRef"
-              placeholder="선택하신 상품 관련 궁금한 것을 물어보세요"
+              :placeholder="
+                isListening
+                  ? '듣는 중...'
+                  : '선택하신 상품 관련 궁금한 것을 물어보세요'
+              "
             ></textarea>
 
-            <button
-              class="btn-send"
-              @click="handleClickSend"
-              :disabled="!text.trim()"
-            >
-              <i class="icon-s icon-arrow-right"></i>
-            </button>
+            <div class="wrap-btn">
+              <button
+                class="btn-mic"
+                :class="{ active: isListening }"
+                @click="toggleSpeech"
+                v-show="!text.trim()"
+              >
+                <i
+                  :class="isListening ? 'icon-s icon-stop' : 'icon-s icon-mic'"
+                ></i>
+              </button>
+
+              <button
+                class="btn-send"
+                :class="{ active: text.trim() }"
+                @click="handleClickSend"
+                :disabled="!text.trim() || isListening"
+                v-show="text.trim()"
+              >
+                <i class="icon-s icon-arrow-right"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>

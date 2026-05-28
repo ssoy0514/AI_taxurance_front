@@ -4,6 +4,7 @@ import Audio from '@/components/Audio.vue'
 import Link from '@/components/Link.vue'
 import RecommendSection from '@/components/RecommendSection.vue'
 import HlsAudio from '@/components/HlsAudio.vue'
+import { AudioList } from '~/utils/mockApi'
 
 export default {
   name: 'podcast',
@@ -39,12 +40,13 @@ export default {
   methods: {
     // 리스트 호출
     async fetchList() {
-      const { infos, succ } = await this.$axios.post('/contents/list', {
-        ext_type: 'audios',
-      })
-      if (succ) {
-        this.list = infos
-      }
+      this.list = AudioList()
+      // const { infos, succ } = await this.$axios.post('/contents/list', {
+      //   ext_type: 'audios',
+      // })
+      // if (succ) {
+      //   this.list = infos
+      // }
     },
 
     // 리스트 호출

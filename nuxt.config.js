@@ -22,6 +22,12 @@ export default {
       },
     ],
     link: [{ rel: 'icon', type: 'image/x-icon', href: '/image/logo.svg' }],
+    script: [
+      {
+        src: 'https://file.kollus.com/vgcontroller/vg-controller-client.latest.min.js',
+        body: true, // body 태그 하단에 삽입하여 파싱 차단 방지
+      },
+    ],
   },
   ssr: true,
   server: {
