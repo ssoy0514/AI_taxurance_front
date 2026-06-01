@@ -1,5 +1,6 @@
 <template>
   <iframe
+    v-if="kollusSrc"
     ref="kollusPlayer"
     width="100%"
     height="100%"
@@ -8,7 +9,7 @@
     allowfullscreen
     webkitallowfullscreen
     mozallowfullscreen
-    allow="local-network-access"
+    allow="autoplay; local-network-access"
     @load="onIframeLoad"
   ></iframe>
 </template>

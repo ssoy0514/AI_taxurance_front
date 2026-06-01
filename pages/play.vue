@@ -36,6 +36,15 @@ export default {
     },
   },
   created() {},
+  watch: {
+    // URL의 탭 쿼리가 변경될 때 selectedTab을 업데이트합니다.
+    '$route.query.tab': {
+      immediate: true,
+      handler(newTab) {
+        if (newTab) this.selectedTab = newTab
+      },
+    },
+  },
   mounted() {
     this.fetchList()
     const tab = this.$route.query.tab
@@ -80,8 +89,6 @@ export default {
       )
       if (currentIndex > -1 && currentIndex < this.list.length - 1) {
         const nextItem = this.list[currentIndex + 1]
-
-        console.log(nextItem)
         this.$router.push({
           name: 'play',
           query: {
@@ -113,9 +120,9 @@ export default {
           <div class="sec-view-inner">
             <div class="view-video">
               <Kollus
-                :key="currentVideo?.object_id"
-                :id="currentVideo?.object_id"
-                :src="currentVideo?.src"
+                v-if="currentVideo"
+                :key="currentVideo.object_id"
+                :id="currentVideo.object_id"
                 :isRepeat="isRepeat"
                 :isPlayAll="isPlayAll"
                 @play-next="playNext"
