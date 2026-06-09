@@ -55,7 +55,7 @@ export default {
 
   methods: {
     handleClickHome() {
-      window.location.href = '/'
+      this.$router.push('/main')
     },
     emitClose() {
       this.$emit('close-menu')

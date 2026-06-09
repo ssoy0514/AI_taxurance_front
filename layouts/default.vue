@@ -4,10 +4,18 @@ import Lnb from '@/components/Lnb.vue'
 import RightView from '@/components/RightView.vue'
 import DetailView from '@/components/DetailView.vue'
 import GlobalLoading from '@/components/GlobalLoading.vue'
+import CookieDevTools from '@/components/CookieDevTools.vue'
 
 export default {
   name: 'defaultLayout',
-  components: { Header, Lnb, RightView, DetailView, GlobalLoading },
+  components: {
+    Header,
+    Lnb,
+    RightView,
+    DetailView,
+    GlobalLoading,
+    CookieDevTools,
+  },
   data() {
     return {
       mobileMenu: false,
@@ -39,6 +47,11 @@ export default {
   mounted() {
     this.setHeight()
     window.addEventListener('resize', this.setHeight)
+
+    // 첫 진입 시 루트 경로('/') 또는 모바일 루트('/mo')인 경우 /main으로 리다이렉트
+    if (this.$route.path === '/' || this.$route.path === '/mo') {
+      this.$router.replace('/main')
+    }
   },
   beforeDestroy() {
     window.removeEventListener('resize', this.setHeight)

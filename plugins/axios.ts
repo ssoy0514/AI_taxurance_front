@@ -10,14 +10,10 @@ const axiosPlugin: Plugin = (ctx) => {
 
   // 공통 요청 인터셉터
   ax.onRequest((config: any) => {
-    const userId = store.state.user?.id
-    const sessionId = store.state.sessionId
-    const channel = store.state.device
-    if (userId && sessionId) {
-      config.headers['oamUserId'] = userId
-      config.headers['sessionId'] = sessionId
-      config.headers['channel'] = channel
-    }
+    // 쿠키 방식 통신을 위해 Credentials 허용
+    config.withCredentials = true
+    config.headers['channel'] = store.state.device
+
     return config
   })
 

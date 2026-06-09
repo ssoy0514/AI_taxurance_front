@@ -29,29 +29,47 @@ export default {
       },
     ],
   },
-  ssr: true,
+  ssr: false, // CSR 모드로 설정
+  router: {
+    middleware: ['auth'],
+    extendRoutes(routes, resolve) {
+      const bridgeRoutes = []
+
+      routes.forEach((route) => {
+        // /mo 프리픽스 라우트 생성
+        bridgeRoutes.push({
+          ...route,
+          path: route.path === '/' ? '/mo' : `/mo${route.path}`,
+          name: route.name ? `mo-${route.name}` : undefined,
+        })
+      })
+
+      // 기존 라우터 세팅에 /pc와 /mo가 붙은 라우터들을 합쳐줍니다.
+      routes.push(...bridgeRoutes)
+    },
+  },
   server: {
     port: process.env.PORT || 5200,
     host: process.env.HOST || '0.0.0.0',
   },
   modules: ['@nuxtjs/axios', '@nuxtjs/proxy'],
   axios: {
-    baseURL: process.env.API_BASE_URL || '', // SSR
-    browserBaseURL: process.env.API_BASE_URL || '', // CSR
+    proxy: true, // axios 요청을 proxy 설정을 통해 보내도록 설정
+    prefix: '/api/v1', // 모든 axios 요청 앞에 /api 프리픽스 자동 추가
     // timeout: Number(process.env.AXIOS_TIMEOUT || 3000),
-    // credentials: true, // 쿠키 기반 인증 시
-    // proxy: false, // 'api' 프록시를 직접 구성하므로 false 유지
+    credentials: true, // 쿠키 기반 인증 시
   },
   proxy: {
-    '/api/': {
-      target: process.env.API_BASE_URL || '',
-      pathRewrite: { '^/api/': '/api/' },
+    '/api/v1': {
+      target: process.env.API_BASE_URL || 'http://localhost:5200',
+      pathRewrite: { '^/api/v1': '' },
       changeOrigin: true,
     },
   },
   plugins: [
     '~/plugins/axios.ts',
     '~/plugins/stream.ts',
+    '~/plugins/router-prefix.js',
     { src: '~/plugins/chartjs.client', mode: 'client' },
     { src: '~/plugins/vue-plyr.client', mode: 'client' },
     { src: '@/plugins/vue-awesome-swiper.client', mode: 'client' },

@@ -15,7 +15,19 @@ export const getDeviceType = (ua: string): string => {
     return 'tablet'
   } else if (mobileRegex.test(ua)) {
     return 'mo'
+  } else if (isTouchDevice()) {
+    // UA상으로는 PC이지만 터치가 가능한 경우 (예: iPad Pro 데스크톱 모드 등)
+    return 'tablet'
   }
 
   return 'pc'
+}
+
+/**
+ * 현재 디바이스가 터치를 지원하는지 여부를 반환합니다.
+ * @returns {boolean}
+ */
+export const isTouchDevice = (): boolean => {
+  if (typeof window === 'undefined') return false
+  return 'ontouchstart' in window || navigator.maxTouchPoints > 0
 }

@@ -29,8 +29,8 @@ export class StreamService {
         signal: this.controller.signal,
         headers: {
           'Content-type': 'application/json',
-          oamUserId: store.state.user?.id,
-          sessionId: store.state.sessionId,
+          // oamUserId: store.state.user?.id,
+          // sessionId: store.state.sessionId,
           channel: store.state.device,
         },
         body: JSON.stringify(params),

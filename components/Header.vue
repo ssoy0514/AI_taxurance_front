@@ -14,7 +14,7 @@ export default {
   },
   methods: {
     handleClickHome() {
-      window.location.href = '/'
+      this.$router.push('/main')
     },
     emitShow() {
       this.$emit('show-menu')

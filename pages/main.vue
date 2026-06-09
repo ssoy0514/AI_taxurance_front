@@ -4,7 +4,7 @@ import RightView from '@/components/RightView.vue'
 import Link from '@/components/Link.vue'
 
 export default {
-  name: 'home',
+  name: 'main',
   components: { RecommendSection, RightView, Link },
 
   data() {
