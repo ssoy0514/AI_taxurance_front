@@ -27,6 +27,22 @@ export default {
           items: [],
           active: true,
         },
+        // {
+        //   title: '언더라이팅',
+        //   id: 'UNDER',
+        //   path: '/under',
+        //   icon: '',
+        //   items: [],
+        //   active: true,
+        // },
+        // {
+        //   title: '약관조회',
+        //   id: 'TERMS',
+        //   path: '/terms',
+        //   icon: '',
+        //   items: [],
+        //   active: true,
+        // },
         {
           title: '숏츠 영상 보기',
           id: 'SHORTS',
@@ -103,11 +119,17 @@ export default {
           </ul>
         </li>
       </ul>
+      <div class="poc-link">
+        <a href="https://risk-live.pages.dev/?src=aisearch" target="_blank">
+          <span class="txt1">질병 라이브<span class="badge">PoC</span></span>
+          <span class="txt2">사용자 의견 수집용 프로토타입</span>
+        </a>
+      </div>
     </nav>
-    <div class="lnb-user" v-if="user.name">
+    <!-- <div class="lnb-user" v-if="user.name">
       <div class="user-initials">{{ user.name ? user.name[0] : '' }}</div>
       <p class="user-name">{{ user?.name }}</p>
-    </div>
+    </div> -->
   </div>
 </template>
 
@@ -127,7 +149,7 @@ export default {
     @include flexbox(space-between, center);
     gap: 8px;
     height: 70px;
-    padding: 0 24px;
+    padding: 0 24px 0 32px;
     font-size: 17px;
     color: #070707;
     font-weight: 600;
@@ -138,11 +160,9 @@ export default {
   }
   nav {
     flex: 1;
-    padding: 12px 40px 20px 20px;
+    padding: 12px 30px 20px 20px;
     li {
       width: 100%;
-      color: #6a7282;
-      font-size: 14px;
     }
     .main-depth {
       @include flexbox(flex-start, flex-start);
@@ -153,7 +173,8 @@ export default {
         @include flexbox(flex-start);
         gap: 12px;
         padding: 14px 12px;
-        color: #62748e;
+        color: #314158;
+        font-size: 15px;
         font-weight: 600;
       }
       a.nuxt-link-active {
@@ -163,6 +184,18 @@ export default {
         i:before {
           background-color: #fff;
         }
+      }
+      .icon-prd-info:before {
+        background-color: #155dfc;
+      }
+      .icon-bible:before {
+        background-color: #155dfc;
+      }
+      .icon-audio:before {
+        background-color: #c44563;
+      }
+      .icon-video:before {
+        background-color: #aa7fee;
       }
     }
     .sub-depth {
@@ -183,6 +216,38 @@ export default {
         // border-color: #f7f6ff;
         background-color: #e8e6f8;
         color: #000;
+      }
+    }
+  }
+  .poc-link {
+    margin: 15px 0 0 12px;
+    border-top: 1px solid #e9e9e9;
+    border-bottom: 1px solid #e9e9e9;
+    a {
+      @include columnFlexbox(center, normal);
+      padding: 24px 0 24px 32px;
+      background: url('/image/icon-live.svg') no-repeat 0 24px;
+      .txt1 {
+        @include flexbox(flex-start, center);
+        gap: 4px;
+        color: #314158;
+        font-size: 16px;
+        font-weight: 600;
+        background: url('/image/icon-arrow-link-fill.svg') no-repeat center
+          right 5px;
+        .badge {
+          padding: 2px 5px;
+          border-radius: 7px;
+          background: #e7638d;
+          color: #fff;
+          font-size: 12px;
+          font-weight: 700;
+        }
+      }
+      .txt2 {
+        margin-top: 8px;
+        color: #777777;
+        font-size: 13px;
       }
     }
   }
@@ -221,7 +286,7 @@ export default {
 @media (max-width: 1280px) {
   .wrap-lnb {
     position: absolute;
-    height: auto;
+    // height: auto;
     top: 0;
     left: -100%;
     border-radius: 0 20px 20px 0;
