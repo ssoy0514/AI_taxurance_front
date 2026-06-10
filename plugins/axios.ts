@@ -1,6 +1,9 @@
 import { Plugin } from '@nuxt/types'
 import { NuxtAxiosInstance } from '@nuxtjs/axios'
-import { handleCommonResponse } from '~/utils/error-handler'
+import {
+  handleCommonResponse,
+  handleSessionTimeout,
+} from '~/utils/error-handler'
 
 const axiosPlugin: Plugin = (ctx) => {
   const { $axios, req, redirect, store, isDev, error: nuxtError } = ctx
@@ -46,6 +49,9 @@ const axiosPlugin: Plugin = (ctx) => {
     const msg = error.response?.data?.detail || error.response?.data?.err
 
     if (status === 404) nuxtError({ statusCode: 404 })
+    if (status === 422) {
+      handleSessionTimeout(nuxtError)
+    }
     handleCommonResponse(data, nuxtError)
     return Promise.reject(error)
   })
