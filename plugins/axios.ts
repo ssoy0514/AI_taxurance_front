@@ -49,7 +49,8 @@ const axiosPlugin: Plugin = (ctx) => {
     const msg = error.response?.data?.detail || error.response?.data?.err
 
     if (status === 404) nuxtError({ statusCode: 404 })
-    if (status === 422) {
+    // HTTP 상태 코드가 422(데이터 오류) 또는 500(서버 오류)일 때 세션 만료 처리 실행
+    if (status === 422 || status === 500) {
       handleSessionTimeout(nuxtError)
     }
     handleCommonResponse(data, nuxtError)

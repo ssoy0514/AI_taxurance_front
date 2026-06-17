@@ -23,15 +23,19 @@ export default {
     ],
     link: [{ rel: 'icon', type: 'image/x-icon', href: '/image/logo.svg' }],
     script: [
-      {
-        src: 'https://file.kollus.com/vgcontroller/vg-controller-client.latest.min.js',
-        body: true, // body 태그 하단에 삽입하여 파싱 차단 방지
-      },
+      ...(process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'qa'
+        ? [
+            {
+              src: 'https://file.kollus.com/vgcontroller/vg-controller-client.latest.min.js', // 로컬 파일 경로로 변경
+              body: true, // body 태그 하단에 삽입하여 파싱 차단 방지
+            },
+          ]
+        : []),
     ],
   },
   ssr: false, // CSR 모드로 설정
   router: {
-    middleware: ['auth'],
+    // middleware: ['auth'],
     extendRoutes(routes, resolve) {
       const bridgeRoutes = []
 
@@ -41,6 +45,12 @@ export default {
           ...route,
           path: route.path === '/' ? '/mo' : `/mo${route.path}`,
           name: route.name ? `mo-${route.name}` : undefined,
+        })
+        // /pc 프리픽스 라우트 생성
+        bridgeRoutes.push({
+          ...route,
+          path: route.path === '/' ? '/pc' : `/pc${route.path}`,
+          name: route.name ? `pc-${route.name}` : undefined,
         })
       })
 

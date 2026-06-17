@@ -67,6 +67,13 @@ export const actions: ActionTree<any, any> = {
 
   // 클라이언트 사이드 사용자 정보 및 권한 체크
   async fetchUser({ commit }) {
+    // 서버에서 /mo/error?statusCode=405 등으로 리다이렉트된 경우,
+    // 사용자 정보를 다시 호출할 필요가 없으므로 스킵합니다.
+    if (this.$router.currentRoute.path.startsWith('/mo/error')) {
+      console.warn('[fetchUser] Skipping user fetch on /mo/error page.')
+      commit('SET_USER', null) // 에러 페이지에서는 사용자 정보를 초기화
+      return
+    }
     try {
       const res = await this.$axios.$post('/auth/self/')
       //res 가 json 문자열인 경우

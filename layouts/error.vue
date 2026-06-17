@@ -8,7 +8,7 @@
       <p class="title">{{ title }}</p>
       <p class="desc" v-if="desc">{{ desc }}</p>
 
-      <div class="actions">
+      <div class="actions" v-if="statusCode !== 422 && statusCode !== 405">
         <nuxt-link to="/" class="btn-l btn-main" v-if="statusCode !== 403"
           >홈으로</nuxt-link
         >
@@ -45,8 +45,13 @@ export default {
     title() {
       if (this.statusCode === 404) return '페이지를 찾을 수 없습니다.'
       if (this.statusCode === 403) return '접근 권한이 없습니다.'
+      if (this.statusCode === 405)
+        return '액세스 토큰 처리 중 오류가 발생했습니다. 관리자에게 문의해 주세요.'
+      if (this.statusCode === 409)
+        return '이미 처리 중이거나 충돌이 발생했습니다.'
       if (this.statusCode >= 500) return '서버에서 오류가 발생했습니다.'
-      return this.error?.message || '알 수 없는 오류가 발생했습니다.'
+
+      return this.error.message || '알 수 없는 오류가 발생했습니다.'
     },
     desc() {
       if (this.statusCode === 404) return '주소가 정확한지 확인해 주세요.'
