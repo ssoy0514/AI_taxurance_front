@@ -1,198 +1,224 @@
 <template>
-  <div>
-    <section class="wrap-bnr" v-if="!searched">
-      <div class="txt">
-        <div class="exp">AI지식검색 WIZ에 오신 것을 환영합니다.</div>
-        <div class="tit">
-          <strong>질병별 보장 정보</strong>와 <strong>설계 인사이트</strong>를
-          확인해보세요!
-        </div>
-      </div>
-      <div class="bg"></div>
-    </section>
-    <section class="wrap-searchC">
-      <div class="input-tC">
-        <mo-text-field
-          v-model="keyword"
-          @input="inputKeyword"
-          @keydown.down.prevent="onArrowDown"
-          @keydown.up.prevent="onArrowUp"
-          @keydown.enter.prevent="onEnter"
-          placeholder="질병명 또는 KCD코드를 입력해주세요."
-          clearable
-        />
-        <mo-button
-          class="btn-send"
-          :disabled="!keyword || diseaseList.length === 0"
-          >send</mo-button
-        >
-      </div>
-      <div class="searchB-pT" v-show="diseaseList.length > 0 && keyword">
-        <div v-if="listStatus === 'ttk'" class="txt-status">
-          <p>
-            유사질병명 <b>{{ diseaseList.length }}</b
-            >건 중 하나를 선택하세요.
-          </p>
-        </div>
-        <div v-else-if="listStatus === 'auto'" class="txt-status">
-          <p>
-            일치하는 질병명 <b>{{ diseaseList.length }}</b
-            >건 중 하나를 선택하세요.
-          </p>
-        </div>
-
-        <div class="wrap-scroll">
-          <ul class="list">
-            <li
-              v-for="(item, index) in diseaseList"
-              :key="index"
-              ref="items"
-              v-html="item.display"
-              :class="{ selected: selectedIndex === index }"
-              @click="onSelect(index)"
-            ></li>
-          </ul>
-        </div>
-      </div>
-    </section>
-    <section class="wrap-bnr-m" v-if="!searched">
-      <div class="icon"></div>
-      <div class="txt">
-        <div class="tit">
-          <strong>질병별 보장 정보</strong>와 <br />
-          <strong>설계 인사이트</strong>를 확인해보세요!
-        </div>
-      </div>
-    </section>
-    <!-- 검색 결과 -->
-    <section v-if="searched && searchResultArr.length > 0">
-      <h3 class="page-subtit">
-        {{ searchResult.d_name }}
-        {{
-          searchResult.comment !== '없음'
-            ? ` - 아래 상품별 인수기준 확인바랍니다. ${searchResult.comment}`
-            : ''
-        }}
-      </h3>
-      <div class="wrap-col2 column" :class="{ on: searched }">
-        <div class="col2-pL">
-          <div class="inner">
-            <article class="box-tW">
-              <dl class="dl-fC2">
-                <dt>보장 정보</dt>
-                <dd
-                  v-for="([key, value], index) in searchResultArr"
-                  :key="index"
-                >
-                  <div class="item">
-                    <span>{{ key }}</span>
-                    <i
-                      :class="{
-                        'badge-tR': value == '불가',
-                        'badge-tB': value == '가능',
-                      }"
-                      >{{ value }}</i
-                    >
-                  </div>
-                </dd>
-              </dl>
-              <dl class="dl-fC2">
-                <dt>보장정보2</dt>
-                <dd>
-                  <div class="item">
-                    <span>{{ lastEntry[0] }}</span>
-                    <i
-                      :class="{
-                        'badge-tR': lastEntry[1] == '불가',
-                        'badge-tB': lastEntry[1] == '가능',
-                      }"
-                      >{{ lastEntry[1] }}</i
-                    >
-                  </div>
-                </dd>
-              </dl>
-            </article>
-            <article class="box-tW">
-              <ul class="list-info">
-                <li>
-                  ※ 간편종신 주보험만 가입시(간편스탠다드 재해장해50%환급특약
-                  포함) : AEUS 內 판정결과가 사망표준일 경우 추가 완화가능
-                </li>
-                <li>
-                  ※ 간편더블보장 주보험만 가입시(생활비서비스,
-                  더블보장보험료환급특약 포함) : AEUS 內 판정결과가 암,사망
-                  표준일 경우 추가 완화 가능
-                </li>
-                <li>
-                  ※ 간편웰에이징 입원류 특약 미부가시 : AEUS 內 판정결과가 LTC
-                  표준일 경우 추가 완화 가능
-                </li>
-                <li>
-                  ※ 더간편다모은/더라이트 [마케팅플랜]에 암,뇌,심 특약만 가입시
-                  : AEUS 內 판정결과가 암,사망 표준일 경우 추가 완화가능
-                </li>
-                <li>※ 초간편보장, 초간편종신은 3개월 內 적용</li>
-              </ul>
-            </article>
-            <article class="box-tW">
-              <dl class="dl-fC">
-                <dt>유사 질병명</dt>
-                <!-- 유사검색어 -->
-                <dd>{{ searchResult.유사검색어 }}</dd>
-              </dl>
-            </article>
-            <article class="box-tB">
-              <dl class="dl-fR">
-                <dt>KCD코드</dt>
-                <dd>
-                  {{ searchResult.대표KCD }} (상세코드 : {{ displayItems }} )
-                  <button
-                    class="moreButton"
-                    v-show="
-                      itemList.length > 5 && displayCount != itemList.length
-                    "
-                    @click="displayCount = itemList.length"
-                  >
-                    더보기
-                  </button>
-                </dd>
-              </dl>
-            </article>
+  <div class="contents">
+    <div class="cont-main">
+      <div class="main-list">
+        <section>
+          <div class="wrap-sub-title">
+            <p class="sub-title">질병별 보장 정보를 확인해보세요.</p>
           </div>
-        </div>
-        <div class="col2-pR">
-          <div class="inner">
-            <div
-              class="loading"
-              :class="{
-                on: isLoadingGpt == 'on',
-                off: isLoadingGpt == 'off',
-              }"
-            >
-              <p>AI가 답변중입니다.</p>
+        </section>
+        <section>
+          <div class="wrap-searchC">
+            <div class="input-tC">
+              <FormInput
+                type="send"
+                v-model="keyword"
+                placeholder="질병명 또는 KCD코드를 입력해주세요."
+                @input="inputKeyword"
+                @arrow-down="onArrowDown"
+                @arrow-up="onArrowUp"
+                @enter="onEnter"
+                clearable
+              />
+              <!-- <button
+                class="btn-send"
+                :disabled="!keyword || diseaseList.length === 0"
+              >
+                send
+              </button> -->
             </div>
-            <article class="box-tBB" :class="{ on: isLoadingGpt == 'off' }">
-              <div class="box-tit">AI가 분석한 인사이트</div>
-              <div class="box-tG" v-html="gptData"></div>
-            </article>
+            <div class="searchB-pT" v-show="diseaseList.length > 0 && keyword">
+              <div v-if="listStatus === 'ttk'" class="txt-status">
+                <p>
+                  유사질병명 <b>{{ diseaseList.length }}</b
+                  >건 중 하나를 선택하세요.
+                </p>
+              </div>
+              <div v-else-if="listStatus === 'auto'" class="txt-status">
+                <p>
+                  일치하는 질병명 <b>{{ diseaseList.length }}</b
+                  >건 중 하나를 선택하세요.
+                </p>
+              </div>
+
+              <div class="wrap-scroll">
+                <ul class="list">
+                  <li
+                    v-for="(item, index) in diseaseList"
+                    :key="index"
+                    ref="items"
+                    v-html="item.display"
+                    :class="{ selected: selectedIndex === index }"
+                    @click="onSelect(index)"
+                  ></li>
+                </ul>
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
+        <!-- <section class="wrap-bnr-m" v-if="!searched">
+          <div class="icon"></div>
+          <div class="txt">
+            <div class="tit">
+              <strong>질병별 보장 정보</strong>와 <br />
+              <strong>설계 인사이트</strong>를 확인해보세요!
+            </div>
+          </div>
+        </section> -->
+        <!-- 검색 결과 -->
+        <section
+          v-if="searched && searchResultArr.length > 0"
+          class="filter-list scroll-y"
+        >
+          <div class="filter-list-inner">
+            <h3 class="page-subtit">
+              {{ searchResult.get('d_name') }}
+              {{
+                searchResult.get('comment') !== '없음'
+                  ? ` - 아래 상품별 인수기준 확인바랍니다. ${searchResult.get(
+                      'comment'
+                    )}`
+                  : ''
+              }}
+            </h3>
+            <div class="wrap-col2 column" :class="{ on: searched }">
+              <div class="col2-pL">
+                <div class="inner">
+                  <article class="box-tW">
+                    <dl class="dl-fC2">
+                      <dt>보장 정보</dt>
+                      <dd
+                        v-for="([key, value], index) in searchResultArr.slice(
+                          8,
+                          -1
+                        )"
+                        :key="index"
+                      >
+                        <div class="item">
+                          <span>{{ key }}</span>
+                          <i
+                            :class="{
+                              'badge-tR': value == '불가',
+                              'badge-tB': value == '가능',
+                            }"
+                            >{{ value }}</i
+                          >
+                        </div>
+                      </dd>
+                    </dl>
+                    <dl class="dl-fC2">
+                      <dt>보장정보2</dt>
+                      <dd>
+                        <div class="item">
+                          <span>{{ lastEntry[0] }}</span>
+                          <i
+                            :class="{
+                              'badge-tR': lastEntry[1] == '불가',
+                              'badge-tB': lastEntry[1] == '가능',
+                            }"
+                            >{{ lastEntry[1] }}</i
+                          >
+                        </div>
+                      </dd>
+                    </dl>
+                  </article>
+                  <article class="box-tW">
+                    <ul class="list-info">
+                      <li>
+                        ※ 간편종신 주보험만 가입시(간편스탠다드
+                        재해장해50%환급특약 포함) : AEUS 內 판정결과가
+                        사망표준일 경우 추가 완화가능
+                      </li>
+                      <li>
+                        ※ 간편더블보장 주보험만 가입시(생활비서비스,
+                        더블보장보험료환급특약 포함) : AEUS 內 판정결과가
+                        암,사망 표준일 경우 추가 완화 가능
+                      </li>
+                      <li>
+                        ※ 간편웰에이징 입원류 특약 미부가시 : AEUS 內 판정결과가
+                        LTC 표준일 경우 추가 완화 가능
+                      </li>
+                      <li>
+                        ※ 더간편다모은/더라이트 [마케팅플랜]에 암,뇌,심 특약만
+                        가입시 : AEUS 內 판정결과가 암,사망 표준일 경우 추가
+                        완화가능
+                      </li>
+                      <li>※ 초간편보장, 초간편종신은 3개월 內 적용</li>
+                    </ul>
+                  </article>
+                  <article class="box-tW">
+                    <dl class="dl-fC">
+                      <dt>유사 질병명</dt>
+                      <!-- 유사검색어 -->
+                      <dd>{{ searchResult.get('유사검색어') }}</dd>
+                    </dl>
+                  </article>
+                  <article class="box-tB">
+                    <dl class="dl-fR">
+                      <dt>KCD코드</dt>
+                      <dd>
+                        {{ searchResult.get('대표KCD') }} (상세코드 :
+                        {{ displayItems }} )
+                        <button
+                          class="moreButton"
+                          v-show="
+                            itemList.length > 5 &&
+                            displayCount != itemList.length
+                          "
+                          @click="displayCount = itemList.length"
+                        >
+                          더보기
+                        </button>
+                      </dd>
+                    </dl>
+                  </article>
+                </div>
+              </div>
+              <div class="col2-pR">
+                <div class="inner">
+                  <div
+                    class="loading"
+                    :class="{
+                      on: isLoadingGpt == 'on',
+                      off: isLoadingGpt == 'off',
+                    }"
+                  >
+                    <p>AI가 답변중입니다.</p>
+                  </div>
+                  <article
+                    class="box-tBB"
+                    :class="{ on: isLoadingGpt == 'off' }"
+                  >
+                    <div class="box-tit">AI가 분석한 인사이트</div>
+                    <div class="box-tG" v-html="gptData"></div>
+                  </article>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
-    </section>
+    </div>
   </div>
 </template>
 
 <script>
 import debounce from 'lodash.debounce'
-import api from '@/api/axios'
-import { getUserInfo } from '@/ui/uidev/AI/common'
+import FormInput from '@/components/FormInput.vue'
+import { Autocomplete, Under } from '@/utils/mockApi'
+// import { getUserInfo } from '@/ui/uidev/AI/common'
 
 export default {
+  components: { FormInput },
   data() {
     return {
       keyword: '', //검색어
-      gptData: '', //AI답변
-      isLoadingGpt: '', //AI답변로딩상태 on:로딩중, off:로딩완료
+      gptData: `[답변]  
+감기는 바이러스에 의해 코, 비강, 인후, 후두 등에 생기는 급성 상기도 감염으로, 급성 비인후염, 급성 부비동염, 급성 인후염, 급성 편도염, 급성 후두염 및 후두개염 등을 모두 포함하는 가장 흔한 급성기 질환입니다. 이는 한국표준질병·사인분류(8차, 2020년)에서 (대분류) Ⅹ. 호흡계통의 질환, (중분류) J00-J06 급성 상기도감염, (소분류) J00, J01, J02, J03, J04, J05, J06에 해당합니다.  
+
+[참조문서]  
+[2] 급성 상기도감염(감기), P29`, //AI답변
+      isLoadingGpt: 'off', //AI답변로딩상태 on:로딩중, off:로딩완료
       listStatus: 'none',
 
       diseaseList: [], //질병리스트
@@ -216,6 +242,7 @@ export default {
   methods: {
     //질문 입력중
     inputKeyword(e) {
+      console.log(e)
       this.keyword = e.trim()
       if (this.keyword.length > 0) {
         this.onKeywordChange(this.keyword)
@@ -228,25 +255,36 @@ export default {
     //질병 리스트 조회
     async getAutocomplete(val) {
       try {
-        const res = await api.post(`/proxy/disease/autocomplete`, {
-          query: val,
-        })
-        if (res.statusText == 'OK') {
-          const data = res.data
-          if (data.d_keys.length > 0 && data.d_names.length > 0) {
-            this.diseaseList = data.d_keys.map((key, idx) => ({
-              key,
-              name: data.d_names[idx],
-              display: this.highlightMatch(data.d_names[idx], val),
-            }))
-            this.listStatus = 'auto'
-          } else {
-            this.diseaseList = []
-            this.listStatus = 'none'
-            this.getRecommended(val) //검색 결과 없을 경우 유사어 API 호출
+        const res = await this.$axios.post(
+          `/proxy/disease/autocomplete`,
+          {
+            query: val,
+          },
+          {
+            headers: {
+              Authorization: 'Bearer ' + token,
+              'X-Custom-Header': 'value',
+            },
           }
-          this.selectedIndex = -1
+        )
+        // if (res.statusText == 'OK') {
+        const autocomplete = Autocomplete()
+        const data = autocomplete[0]
+        console.log(data)
+        if (data.d_keys.length > 0 && data.d_names.length > 0) {
+          this.diseaseList = data.d_keys.map((key, idx) => ({
+            key,
+            name: data.d_names[idx],
+            display: this.highlightMatch(data.d_names[idx], val),
+          }))
+          this.listStatus = 'auto'
+        } else {
+          this.diseaseList = []
+          this.listStatus = 'none'
+          this.getRecommended(val) //검색 결과 없을 경우 유사어 API 호출
         }
+        this.selectedIndex = -1
+        // }
       } catch (err) {
         console.error('질병 리스트 조회 실패:', err)
       }
@@ -254,7 +292,7 @@ export default {
     //유사어 리스트 조회
     async getRecommended(val) {
       try {
-        const res = await api.post(`/proxy/disease/ttk`, { query: val })
+        const res = await this.$axios.post(`/proxy/disease/ttk`, { query: val })
         if (res.statusText == 'OK') {
           const data = res.data
           if (data.d_keys.length > 0 && data.d_names.length > 0) {
@@ -306,47 +344,37 @@ export default {
     },
     //질병 상세 조회
     async onSelect(index) {
+      console.log('onSelect')
       this.keyword = ''
       const selectedKey = this.diseaseList[index].key
       if (!selectedKey) return
       try {
-        const res = await api.post(`/proxy/disease/under`, {
-          d_key: selectedKey,
-        })
-        if (res.statusText == 'OK') {
-          this.searched = true
-          const underMsg = res.data.message.replace(/'/g, '"')
-          const resultParse = JSON.parse(underMsg)
+        this.searched = true
+        const data = Under()
+        const underMsg = data[0].message.replace(/'/g, '"')
+        const resultParse = JSON.parse(underMsg)
+        this.searchResult = new Map(Object.entries(resultParse))
+        this.searchResultArr = Array.from(this.searchResult.entries())
+        this.lastEntry = this.searchResultArr.pop()
+        this.itemList = this.searchResult.get('상세KCD').split(',')
+        this.displayCount = 5
 
-          // 메타데이터로 분류할 키 목록 정의
-          const metaKeys = [
-            'd_name',
-            '대표KCD',
-            '대표질병',
-            '완화종류',
-            '암UL검토',
-            '유사검색어',
-            '상세KCD',
-            'comment',
-          ]
-          this.searchResult = {}
-          const coverages = []
+        // const res = await this.$axios.post(`/proxy/disease/under`, {
+        //   d_key: selectedKey,
+        // })
+        // if (res.statusText == 'OK') {
+        //   this.searched = true
+        //   const underMsg = res.data.message.replace(/'/g, '"')
+        //   const resultParse = JSON.parse(underMsg)
 
-          Object.entries(resultParse).forEach(([key, value]) => {
-            if (metaKeys.includes(key)) {
-              this.searchResult[key] = value
-            } else {
-              coverages.push([key, value])
-            }
-          })
+        //   this.searchResult = new Map(Object.entries(resultParse))
+        //   this.searchResultArr = Array.from(this.searchResult.entries())
+        //   this.lastEntry = this.searchResultArr.pop()
+        //   this.itemList = this.searchResult.get('상세KCD').split(',')
+        //   this.displayCount = 5
 
-          this.lastEntry = coverages.length > 0 ? coverages.pop() : []
-          this.searchResultArr = coverages
-          this.itemList = (this.searchResult.상세KCD || '').split(',')
-          this.displayCount = 5
-
-          this.startStreaming()
-        }
+        //   this.startStreaming()
+        // }
       } catch (err) {
         console.error('질병 상세 조회 실패:', err)
       }
@@ -359,7 +387,7 @@ export default {
       const userInfo = getUserInfo()
       const params = {
         userId: userInfo.userId,
-        qry: this.searchResult.d_name,
+        qry: this.searchResult.get('d_name'),
         date: '',
         spctrt: '',
         mrch: '질병행위산출내역표준안내서',
@@ -368,43 +396,29 @@ export default {
         msgKeyId: Date.now(),
         code3: null,
       }
-      let url
-      if (process.env.VUE_APP_ENV === 'local') {
-        url = '/proxy/disease/medical'
-      } else {
-        url = process.env.VUE_APP_BASE_API_URL + 'disease/medical'
-      }
 
-      const res = await fetch(url, {
-        method: 'POST',
+      await this.$stream.fetchStream('/disease/medical', params, {
         headers: {
-          'Content-Type': 'application/json',
           userId: userInfo.userId,
           oamUserId: userInfo.oamUserId,
         },
-        body: JSON.stringify(params),
+        onChunk: (chunk) => {
+          if (chunk.trim()) {
+            this.gptData += chunk
+          }
+        },
+        onDone: () => {
+          if (!this.gptData || this.gptData.startsWith('{')) {
+            this.gptData = '현재 네트워크 통신이 불안정합니다. 다시 시도해주세요.'
+          }
+        },
+        onError: () => {
+          this.gptData = '현재 네트워크 통신이 불안정합니다. 다시 시도해주세요.'
+        },
+        onFinished: () => {
+          this.isLoadingGpt = 'off'
+        },
       })
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder('utf-8')
-      let hasData = false
-      let resData = ''
-      this.isLoadingGpt = 'off'
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value, { stream: true })
-        if (chunk.trim()) {
-          hasData = true
-          resData += chunk
-          this.gptData += chunk
-        }
-      }
-      if (!hasData || resData.startsWith('{')) {
-        this.gptData = '현재 네트워크 통신이 불안정합니다. 다시 시도해주세요.'
-      }
     },
   },
 }

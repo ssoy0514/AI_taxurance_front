@@ -1,6 +1,6 @@
 <template>
   <iframe
-    v-if="kollusSrc"
+    v-if="currentSrc"
     ref="kollusPlayer"
     width="100%"
     height="100%"
@@ -54,6 +54,11 @@ export default {
     onIframeLoad() {
       if (!window.VgControllerClient) return
 
+      // [진단용] iframe에서 오는 postMessage 직접 관찰
+      window.addEventListener('message', (e) => {
+        console.log('[message raw]', e.origin, e.data)
+      })
+
       if (this.vgController) {
         this.vgController = null
       }
@@ -62,9 +67,17 @@ export default {
         this.vgController = new window.VgControllerClient({
           target_window: this.$refs.kollusPlayer.contentWindow,
         })
+        console.log(
+          'VgController initialized for ID:',
+          this.id,
+          this.currentSrc
+        )
 
         // URL 플래그 외에 컨트롤러를 통해 명시적으로 재생 실행
-        this.vgController.play()
+        this.vgController.on('ready', () => {
+          console.log('VgController ready 이벤트 수신')
+          this.vgController.play()
+        })
 
         // 재생 종료 시 반복 재생 또는 다음 영상 재생
         this.vgController.on('done', () => {

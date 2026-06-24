@@ -28,18 +28,18 @@ export default {
           active: true,
         },
         {
-          title: '언더라이팅',
+          title: '간편 언더라이팅',
           id: 'UNDER',
-          path: '/under',
-          icon: '',
+          path: '/sales/under',
+          icon: 'icon-under',
           items: [],
           active: true,
         },
         {
           title: '약관조회',
           id: 'TERMS',
-          path: '/terms',
-          icon: '',
+          path: '/sales/terms',
+          icon: 'icon-terms',
           items: [],
           active: true,
         },
@@ -184,18 +184,6 @@ export default {
         i:before {
           background-color: #fff;
         }
-      }
-      .icon-prd-info:before {
-        background-color: #155dfc;
-      }
-      .icon-bible:before {
-        background-color: #155dfc;
-      }
-      .icon-audio:before {
-        background-color: #c44563;
-      }
-      .icon-video:before {
-        background-color: #aa7fee;
       }
     }
     .sub-depth {

@@ -74,6 +74,8 @@ export default {
       target: process.env.API_BASE_URL || 'http://localhost:5200',
       pathRewrite: { '^/api/v1': '' },
       changeOrigin: true,
+      secure: false,
+      selfHandleResponse: false, // 스트리밍 응답 버퍼링 방지
     },
   },
   plugins: [

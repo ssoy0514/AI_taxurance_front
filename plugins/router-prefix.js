@@ -36,15 +36,15 @@ export default ({ app, store }) => {
     // path가 '/' 일 때 로컬일 때는 /main 으로, 개발계, 검증계, 운영일 때 /pc/main 으로 리다이렉트
     if (to.path === '/') {
       if (isLocal) {
-        return next('/main')
+        window.location.href = '/main'
       } else {
         // 운영/개발 서버 환경에서는 서버를 거쳐 새로고침 되도록 window.location 사용
         if (process.client) {
           const queryString = window.location.search
           window.location.href = '/pc/main' + queryString
         }
-        return // next()를 호출하지 않아 라우터 이동 중단
       }
+      return // next()를 호출하지 않아 라우터 이동 중단
     }
 
     // 채널이 모바일(mo)인데 현재 경로에 /mo 프리픽스가 없는 경우에만 추가

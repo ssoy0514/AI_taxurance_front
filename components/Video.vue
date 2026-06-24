@@ -1,5 +1,6 @@
 <script>
 import moment from 'moment'
+import { formatViews } from '@/utils/common'
 
 export default {
   props: {
@@ -11,6 +12,7 @@ export default {
   },
   computed: {},
   methods: {
+    formatViews,
     viewVideo(item) {
       this.$router.push({
         name: 'play',
@@ -57,10 +59,15 @@ export default {
       <p class="txt ellipsis-oneline">
         {{ video?.title }}
       </p>
-      <p class="txt-time">
-        <i class="icon-xs icon-time"></i>
-        {{ video?.duration }}
-      </p>
+      <div class="btm">
+        <p class="txt-time">
+          <i class="icon-xs icon-time"></i>
+          {{ video?.duration }}
+        </p>
+        <p class="view-count">
+          <i class="icon-m icon-eye"></i>{{ formatViews(video?.views) }}
+        </p>
+      </div>
     </div>
   </div>
 </template>
@@ -136,11 +143,24 @@ export default {
       font-size: 15px;
       font-weight: 600;
     }
+    .btm {
+      @include flexbox(space-between, center);
+      width: 100%;
+    }
     .txt-time {
       @include flexbox(flex-start, center);
       gap: 4px;
       color: #90a1b9;
       font-size: 14px;
+    }
+    .view-count {
+      @include flexbox();
+      gap: 4px;
+      color: #364153;
+      font-size: 14px;
+      i:before {
+        background-color: #364153;
+      }
     }
   }
   &.main {
@@ -155,6 +175,12 @@ export default {
       color: #fff;
     }
     .txt-time {
+      color: #fff;
+      i:before {
+        background-color: #fff;
+      }
+    }
+    .view-count {
       color: #fff;
       i:before {
         background-color: #fff;

@@ -1,266 +1,300 @@
 <template>
-  <div>
-    <section class="sort-m">
-      <i class="sort"></i>
-      <ul class="list-col3D">
-        <li>{{ productNm ? productNm : '상품명' }}</li>
-        <li>{{ dateKey ? dateKey : '판매기간' }}</li>
-        <li>
-          {{
-            productNm && dateKey && termNm == ''
-              ? '전체'
-              : termNm
-              ? termNm
-              : '특약명'
-          }}
-        </li>
-      </ul>
-      <mo-button
-        class="btn-accordion"
-        :class="{ on: openSearch }"
-        @click="openSearch = !openSearch"
-        title="검색 열기/닫기"
-        ><i></i
-      ></mo-button>
-    </section>
-    <section
-      class="wrap-selectG"
-      :class="{ searched: searched, off: !openSearch }"
-    >
-      <ul class="list-selectG">
-        <li class="w100">
-          <label class="required">상품명</label>
-          <div class="form-wrap">
-            <mo-text-field
-              v-model="productNm"
-              placeholder="상품명을 입력해주세요."
-              @input="onInput($event, 'product')"
-              @focus="productYN = true"
-              clearable
-            />
-            <div
-              class="wrap-layer"
-              v-show="
-                isProductNm &&
-                productYN &&
-                Object.keys(foundProducts).length > 0
-              "
-            >
-              <ul>
-                <li
-                  v-for="(item, key) in foundProducts"
-                  :key="key"
-                  v-html="highlightMatch(key, productNm)"
-                  @click="onClick(item, key, 'product')"
-                ></li>
-              </ul>
-            </div>
-            <div
-              class="wrap-layer"
-              v-show="
-                !isProductNm &&
-                productYN &&
-                Object.keys(productLists).length > 0
-              "
-            >
-              <ul>
-                <li
-                  v-for="(item, key) in productLists"
-                  :key="key"
-                  @click="onClick(item, key, 'product')"
-                >
-                  {{ key }}
-                </li>
-              </ul>
-            </div>
+  <div class="contents">
+    <div class="cont-main">
+      <div class="main-list">
+        <section>
+          <div class="wrap-sub-title">
+            <p class="sub-title">약관</p>
           </div>
-        </li>
-        <li class="w50">
-          <label>판매기간</label>
-          <div class="form-wrap">
-            <mo-text-field
-              v-model="dateKey"
-              placeholder="기간을 설정하세요."
-              @input="onInput($event, 'date')"
-              @focus="dateListYN = true"
-              :disabled="!Object.keys(deteLists).length > 0"
-              :clearable="dateKey !== '전체'"
-            />
-            <div
-              class="wrap-layer"
-              v-if="dateListYN && Object.keys(deteLists).length > 0"
-            >
-              <ul>
-                <li
-                  v-for="(item, key) in deteLists"
-                  :key="key"
-                  @click="onClick(item, key, 'date')"
-                >
-                  {{ key }}
-                </li>
-              </ul>
-            </div>
-          </div>
-        </li>
-        <li class="w50">
-          <label>특약</label>
-          <div class="form-wrap">
-            <mo-text-field
-              v-model="termNm"
-              placeholder="전체"
-              @input="onInput($event, 'term')"
-              @focus="termListYN = true"
-              :disabled="termsLists.length < 1 || dateKey == '전체'"
-              :clearable="termNm !== '전체'"
-            />
-            <div class="wrap-layer" v-if="termListYN && foundTerms.length > 0">
-              <ul>
-                <li
-                  v-for="(item, key) in foundTerms"
-                  :key="key"
-                  v-html="highlightMatch(item, termNm)"
-                  @click="onClick(item, key, 'term')"
-                ></li>
-              </ul>
-            </div>
-          </div>
-        </li>
-      </ul>
-    </section>
-    <div class="wrap-col2C">
-      <section class="wrap-searchC">
-        <div class="input-tC">
-          <mo-text-field
-            v-model="keyword"
-            placeholder="약관 키워드나 검색어, 질문을 입력해주세요."
-            clearable
-            @enter="sendKeyword"
-          />
-          <mo-button
-            class="btn-send"
-            :disabled="!productNm || !dateKey || !keyword"
-            @click="sendKeyword"
-            >send</mo-button
+        </section>
+        <!-- <div class="sort-m">
+          <i class="sort"></i>
+          <ul class="list-col3D">
+            <li>{{ productNm ? productNm : '상품명' }}</li>
+            <li>{{ dateKey ? dateKey : '판매기간' }}</li>
+            <li>
+              {{
+                productNm && dateKey && termNm == ''
+                  ? '전체'
+                  : termNm
+                  ? termNm
+                  : '특약명'
+              }}
+            </li>
+          </ul>
+          <button
+            class="btn-accordion"
+            :class="{ on: openSearch }"
+            @click="openSearch = !openSearch"
+            title="검색 열기/닫기"
           >
-        </div>
-      </section>
-      <div
-        class="wrap-btnR"
-        v-if="productNm != '' && dateKey != '' && dateKey != '전체'"
-      >
-        <mo-button
-          class="btn-tB2 ico-folder"
-          @click="openPopUp(productNm, dateKey.substring(0, 8), 1)"
-          >통약관 바로보기</mo-button
+            <i></i>
+          </button>
+        </div> -->
+
+        <!-- <section>
+          <div
+            class="wrap-selectG"
+            :class="{ searched: searched, off: !openSearch }"
+          ></div>
+        </section> -->
+        <section
+          class="wrap-selectG"
+          :class="{ searched: searched, off: !openSearch }"
         >
-      </div>
-    </div>
-    <!-- 검색결과 -->
-    <template v-if="dataResult.length > 0">
-      <div class="wrap-result">
-        <div class="list-header">
-          <div class="txt-sum">
-            총 <strong>{{ dataResult.length }}</strong
-            >건의 결과입니다.
-          </div>
-          <div class="wrap-switch">
-            AI답변 <mo-switch v-model="onAI" labeled />
-          </div>
-        </div>
-      </div>
-      <div class="wrap-col2 column-reverse" :class="{ on: onAI }">
-        <div class="col2-pL">
-          <div class="inner">
-            <section class="wrap-result">
-              <div class="list-content">
-                <ul class="wrap-list-result">
-                  <li
-                    class="graybox-item"
-                    v-for="(item, index) in viewList"
-                    :key="index"
-                  >
-                    <div class="wrap-item">
-                      <div class="wrap-txt" :class="{ on: item.showAll }">
-                        <p class="tit">{{ item.mrch_tl }}</p>
-                        <p>{{ item.spctrt_tl }}</p>
-                        <p v-html="item.context"></p>
-                      </div>
-                      <div class="wrap-btnC">
-                        <mo-button
-                          class="btn-wide"
-                          :class="{ on: item.showAll }"
-                          @click="item.showAll = !item.showAll"
-                          ><span>펼치기</span><span>닫기</span><i></i
-                        ></mo-button>
-                      </div>
-                      <div
-                        class="icon"
-                        :class="{ pdf: item.link_url !== '' }"
-                        @click="
-                          openPopUp(item.mrch_tl, item.date_tl, item.page_no)
-                        "
-                      ></div>
-                    </div>
-                  </li>
-                </ul>
-                <div class="wrap-btnCB">
-                  <mo-button
-                    class="btn-more"
-                    v-show="dataResult.length > displayCount"
-                    @click="moreList"
-                    ><i>+</i> 3건 더보기</mo-button
-                  >
+          <ul class="list-selectG">
+            <li class="w100">
+              <label class="required">상품명</label>
+              <div class="form-wrap">
+                <FormInput
+                  :value="productNm"
+                  placeholder="상품명을 입력해주세요."
+                  @input="onInput($event, 'product')"
+                  @focus="productYN = true"
+                  clearable
+                />
+                <div
+                  class="wrap-layer"
+                  v-show="
+                    isProductNm &&
+                    productYN &&
+                    Object.keys(foundProducts).length > 0
+                  "
+                >
+                  <ul>
+                    <li
+                      v-for="(item, key) in foundProducts"
+                      :key="key"
+                      v-html="highlightMatch(key, productNm)"
+                      @click="onClick(item, key, 'product')"
+                    ></li>
+                  </ul>
+                </div>
+                <div
+                  class="wrap-layer"
+                  v-show="
+                    !isProductNm &&
+                    productYN &&
+                    Object.keys(productLists).length > 0
+                  "
+                >
+                  <ul>
+                    <li
+                      v-for="(item, key) in productLists"
+                      :key="key"
+                      @click="onClick(item, key, 'product')"
+                    >
+                      {{ key }}
+                    </li>
+                  </ul>
                 </div>
               </div>
-            </section>
-          </div>
-        </div>
-        <div class="col2-pR" v-if="onAI">
-          <div class="inner">
-            <div
-              class="loading"
-              :class="{
-                on: isLoadingGpt == 'on',
-                off: isLoadingGpt == 'off',
-              }"
-            >
-              <p>AI가 답변중입니다.</p>
+            </li>
+            <li class="w50">
+              <label>판매기간</label>
+              <div class="form-wrap">
+                <FormInput
+                  :value="dateKey"
+                  placeholder="기간을 설정하세요."
+                  @input="onInput($event, 'date')"
+                  @focus="dateListYN = true"
+                  :disabled="!Object.keys(deteLists).length > 0"
+                  :clearable="dateKey !== '전체'"
+                />
+                <div
+                  class="wrap-layer"
+                  v-if="dateListYN && Object.keys(deteLists).length > 0"
+                >
+                  <ul>
+                    <li
+                      v-for="(item, key) in deteLists"
+                      :key="key"
+                      @click="onClick(item, key, 'date')"
+                    >
+                      {{ key }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </li>
+            <li class="w50">
+              <label>특약</label>
+              <div class="form-wrap">
+                <FormInput
+                  :value="termNm"
+                  placeholder="전체"
+                  @input="onInput($event, 'term')"
+                  @focus="termListYN = true"
+                  :disabled="termsLists.length < 1 || dateKey == '전체'"
+                  :clearable="termNm !== '전체'"
+                />
+                <div
+                  class="wrap-layer"
+                  v-if="termListYN && foundTerms.length > 0"
+                >
+                  <ul>
+                    <li
+                      v-for="(item, key) in foundTerms"
+                      :key="key"
+                      v-html="highlightMatch(item, termNm)"
+                      @click="onClick(item, key, 'term')"
+                    ></li>
+                  </ul>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </section>
+        <div class="wrap-col2C">
+          <section class="wrap-searchC">
+            <div class="input-tC">
+              <FormInput
+                v-model="keyword"
+                placeholder="약관 키워드나 검색어, 질문을 입력해주세요."
+                @enter="sendKeyword"
+                clearable
+              />
+              <button
+                class="btn-send"
+                :disabled="!productNm || !dateKey || !keyword"
+                @click="sendKeyword"
+              >
+                send
+              </button>
             </div>
-            <article class="box-tBB" :class="{ on: isLoadingGpt == 'off' }">
-              <div class="box-tit">AI 답변입니다.</div>
-              <div class="box-tG" v-html="gptData"></div>
-            </article>
+          </section>
+          <div
+            class="wrap-btnR"
+            v-if="productNm != '' && dateKey != '' && dateKey != '전체'"
+          >
+            <button
+              class="btn-tB2 ico-folder"
+              @click="openPopUp(productNm, dateKey.substring(0, 8), 1)"
+            >
+              통약관 바로보기
+            </button>
           </div>
         </div>
+        <!-- 검색결과 -->
+        <!-- <template v-if="dataResult.length > 0"> -->
+        <div class="wrap-result" ref="scrollRef">
+          <div class="list-header">
+            <div class="txt-sum">
+              총 <strong>{{ dataResult.length }}</strong
+              >건의 결과입니다.
+            </div>
+            <div class="wrap-switch">
+              AI답변 <FormSwitch v-model="onAI" :labeled="true" />
+            </div>
+          </div>
+          <div class="wrap-col2 column-reverse" :class="{ on: onAI }">
+            <div class="col2-pL">
+              <div class="inner">
+                <section class="wrap-result">
+                  <div class="list-content">
+                    <ul class="wrap-list-result">
+                      <li
+                        class="graybox-item"
+                        v-for="(item, index) in viewList"
+                        :key="index"
+                      >
+                        <div class="wrap-item">
+                          <div class="wrap-txt" :class="{ on: item.showAll }">
+                            <p class="tit">{{ item.mrch_tl }}</p>
+                            <p>{{ item.spctrt_tl }}</p>
+                            <p v-html="item.context"></p>
+                          </div>
+                          <div class="wrap-btnC">
+                            <button
+                              class="btn-wide"
+                              :class="{ on: item.showAll }"
+                              @click="item.showAll = !item.showAll"
+                            >
+                              <span>펼치기</span><span>닫기</span><i></i>
+                            </button>
+                          </div>
+                          <div
+                            class="icon"
+                            :class="{ pdf: item.link_url !== '' }"
+                            @click="
+                              openPopUp(
+                                item.mrch_tl,
+                                item.date_tl,
+                                item.page_no
+                              )
+                            "
+                          ></div>
+                        </div>
+                      </li>
+                    </ul>
+                    <div class="wrap-btnCB">
+                      <button
+                        class="btn-more"
+                        v-show="dataResult.length > displayCount"
+                        @click="moreList"
+                      >
+                        <i>+</i> 3건 더보기
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+            <div class="col2-pR" v-if="onAI">
+              <div class="inner">
+                <div
+                  class="loading"
+                  :class="{
+                    on: isLoadingGpt == 'on',
+                    off: isLoadingGpt == 'off',
+                  }"
+                >
+                  <p>AI가 답변중입니다.</p>
+                </div>
+                <article class="box-tBB" :class="{ on: isLoadingGpt == 'off' }">
+                  <div class="box-tit">AI 답변입니다.</div>
+                  <div class="box-tG" v-html="gptData"></div>
+                </article>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- </template> -->
+        <!-- 검색결과 없음 -->
+        <div
+          v-if="searched && dataResult.length === 0"
+          class="result-wrap__none"
+        >
+          <p>검색결과가 없습니다.</p>
+          <p>총 0 건의 결과입니다. 다른 키워드를 입력해보세요.</p>
+        </div>
+        <section class="wrap-info">
+          <ul>
+            <li>
+              신상품 약관을 포함한 모든 업데이트 내용은 매월 3주차내로 일괄
+              반영됩니다.
+            </li>
+            <li>
+              최신 내용이 반영되지 않은 경우, 추후 반영될 예정이오니 양해
+              부탁드립니다.
+            </li>
+            <li>반영 일정은 매월 업무 상황에 따라 변동될 수 있습니다.</li>
+          </ul>
+        </section>
       </div>
-    </template>
-    <!-- 검색결과 없음 -->
-    <div v-if="searched && dataResult.length === 0" class="result-wrap__none">
-      <p>검색결과가 없습니다.</p>
-      <p>총 0 건의 결과입니다. 다른 키워드를 입력해보세요.</p>
-    </div>
-    <div class="wrap-info">
-      <ul>
-        <li>
-          신상품 약관을 포함한 모든 업데이트 내용은 매월 3주차내로 일괄
-          반영됩니다.
-        </li>
-        <li>
-          최신 내용이 반영되지 않은 경우, 추후 반영될 예정이오니 양해
-          부탁드립니다.
-        </li>
-        <li>반영 일정은 매월 업무 상황에 따라 변동될 수 있습니다.</li>
-      </ul>
     </div>
   </div>
 </template>
 
 <script>
 import debounce from 'lodash.debounce'
-import api from '@/api/axios'
-import { getUserInfo } from '@/ui/uidev/AI/common'
+import FormInput from '@/components/FormInput.vue'
+import FormSwitch from '@/components/FormSwitch.vue'
+import { termsAutocomplete } from '@/utils/mockApi'
+// import { getUserInfo } from '@/ui/uidev/AI/common'
 
 export default {
+  components: { FormInput, FormSwitch },
   data() {
     return {
       productNm: '', //상품명
@@ -289,11 +323,7 @@ export default {
       displayCount: 3, //검색결과 노출 갯수
     }
   },
-  activated() {
-    if (!Object.keys(this.productLists).length > 0) {
-      this.getAutocomplete('')
-    }
-  },
+  activated() {},
   watch: {
     onAI: {
       immediate: true,
@@ -301,28 +331,44 @@ export default {
         if (val && !this.gptData && this.dataResult.length > 0) {
           this.startStreaming()
         }
+        this.$nextTick(() => {
+          if (this.$refs.scrollRef) {
+            this.$refs.scrollRef.scrollIntoView({ block: 'start', behavior: 'instant' })
+          }
+        })
       },
     },
   },
   mounted() {
     const bodyElement = document.querySelector('body')
     bodyElement.addEventListener('click', this.bodyClick)
+
+    if (!Object.keys(this.productLists).length > 0) {
+      this.getAutocomplete('')
+    }
   },
   methods: {
     //인풋 입력 중
     onInput(e, type) {
+      const val = e || ''
       if (type === 'product') {
-        this.productNm = e.trim()
+        this.productNm = val.trim()
         if (this.productNm.length > 0) {
           this.isProductNm = true
           this.onProductNmChange(this.productNm)
         } else {
           this.isProductNm = false
+          // 상품명 초기화 시 하위 데이터 리셋
+          this.dateKey = ''
+          this.deteLists = {}
+          this.termsLists = []
+          this.termNm = ''
         }
-      } else if (type == 'date') {
-        this.dateKey = e ? e : '전체'
+      } else if (type === 'date') {
+        this.dateKey = val || '전체'
         this.termNm = '전체'
-      } else {
+      } else if (type === 'term') {
+        this.termNm = val
         if (this.termNm.length > 0) {
           this.foundTerms = this.termsLists.filter((item) =>
             item.includes(this.termNm)
@@ -330,13 +376,6 @@ export default {
         } else {
           this.foundTerms = this.termsLists
         }
-      }
-      //초기화
-      if (!this.isProductNm) {
-        this.dateKey = ''
-        this.deteLists = {}
-        this.termsLists = []
-        this.termNm = ''
       }
     },
     //인풋 클릭 시
@@ -361,22 +400,24 @@ export default {
     }, 300),
     //상품 리스트 조회
     async getAutocomplete(val) {
-      try {
-        const res = await api.post(`/proxy/term/autocomplete`, {
-          sent: val,
-        })
-        if (res.statusText == 'OK') {
-          const data = res.data.result
+      this.foundProducts = termsAutocomplete()
+      this.productLists = termsAutocomplete()
+      // try {
+      //   const res = await api.post(`/proxy/term/autocomplete`, {
+      //     sent: val,
+      //   })
+      //   if (res.statusText == 'OK') {
+      //     const data = res.data.result
 
-          if (val) {
-            this.foundProducts = data
-          } else {
-            this.productLists = data
-          }
-        }
-      } catch (err) {
-        console.error('상품 리스트 조회 실패:', err)
-      }
+      //     if (val) {
+      //       this.foundProducts = data
+      //     } else {
+      //       this.productLists = data
+      //     }
+      //   }
+      // } catch (err) {
+      //   console.error('상품 리스트 조회 실패:', err)
+      // }
     },
     //검색버튼 클릭
     async sendKeyword() {

@@ -445,16 +445,22 @@ $colorInfo: rgb(55, 154, 230); //#379ae6
   @include maskImages('icon-home.svg', #2563eb);
 }
 .icon-prd-info:before {
-  @include maskImages('icon-prd-info.svg');
+  @include maskImages('icon-prd-info.svg', #155dfc);
 }
 .icon-bible:before {
-  @include maskImages('icon-bible.svg');
+  @include maskImages('icon-bible.svg', #155dfc);
+}
+.icon-under:before {
+  @include maskImages('icon-under.svg', #155dfc);
+}
+.icon-terms:before {
+  @include maskImages('icon-terms.svg', #155dfc);
 }
 .icon-audio:before {
-  @include maskImages('icon-audio.svg');
+  @include maskImages('icon-audio.svg', #aa7fee);
 }
 .icon-video:before {
-  @include maskImages('icon-video.svg');
+  @include maskImages('icon-video.svg', #c44563);
 }
 .icon-image:before {
   @include maskImages('icon-image.svg');
@@ -509,6 +515,9 @@ $colorInfo: rgb(55, 154, 230); //#379ae6
 }
 .icon-stop:before {
   @include maskImages('icon-stop.svg');
+}
+.icon-clear:before {
+  @include maskImages('icon-clear.svg', #aaa);
 }
 
 /************************************************
