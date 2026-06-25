@@ -42,10 +42,7 @@ export default {
     :class="type"
     @click="type === 'link' ? viewAudio(audio) : showPopup(audio)"
   >
-    <div class="thumbnail-container">
-      <img v-if="audio?.thumbnail" :src="audio?.thumbnail" alt="" />
-      <i class="icon-s icon-play"></i>
-    </div>
+    <div class="thumbnail-container">🎧</div>
     <div class="text">
       <div class="tags-new">
         <p class="tags">
@@ -84,6 +81,7 @@ export default {
     margin-top: 10px;
   }
   .thumbnail-container {
+    @include flexbox();
     flex-shrink: 0;
     position: relative;
     width: 60px;
@@ -91,6 +89,7 @@ export default {
     border-radius: 8px;
     background-color: #eee;
     overflow: hidden;
+    font-size: 20px;
     img {
       width: 100%;
       height: 100%;

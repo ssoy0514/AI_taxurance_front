@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+  <title>AI Search - 메인 (mainNew)</title>
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans KR', 'Segoe UI', sans-serif; background: #f3f4f6; color: #101828; }
+    a { text-decoration: none; color: inherit; }
+    button { border: none; cursor: pointer; font-family: inherit; background: none; }
+    em { font-style: normal; }
+    ul { list-style: none; }
+    img { display: block; }
+
+    /* ── Layout ── */
+    .cont-recommend { padding: 32px 0 40px; }
+    .section { width: 100%; max-width: 740px; margin: 0 auto; padding: 0 30px; }
+    .section + .section { margin-top: 36px; }
+
+    /* ── Section Header ── */
+    .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .section-header h3 { font-size: 22px; font-weight: 800; color: #101828; }
+    .section-badge { padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 700; color: #fff; }
+    .badge-popular { background: #ff4d4f; }
+
+    /* ── 퀵메뉴 ── */
+    .quickmenu-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .qm-btn { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 10px; border-radius: 16px; background: #fff; border: 1px solid #e4e7ec; box-shadow: 0 1px 6px rgba(0,0,0,.05); cursor: pointer; transition: box-shadow .2s, transform .2s; text-decoration: none; }
+    .qm-btn:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); transform: translateY(-2px); }
+    .qm-icon { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 12px; background: #eaf5ff; }
+    .qm-icon svg { width: 22px; height: 22px; }
+    .qm-btn span { font-size: 12px; font-weight: 600; color: #344054; text-align: center; line-height: 1.3; word-break: keep-all; }
+
+    /* ── 메인카드리스트 ── */
+    .card-list { display: flex; flex-direction: column; gap: 16px; }
+    .card-item { display: flex; flex-direction: column; gap: 18px; padding: 24px 26px; border-radius: 20px; position: relative; box-shadow: 0 2px 12px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04); overflow: hidden; }
+    .card-header { display: flex; flex-direction: column; gap: 8px; }
+    .card-tag { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; align-self: flex-start; }
+    .card-tit { font-size: 24px; font-weight: 800; color: #101828; line-height: 1.3; }
+    .card-tit em { display: block; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    .card-desc { font-size: 13px; color: #667085; }
+    .card-media-group { display: flex; flex-direction: column; gap: 8px; }
+    .card-media-label { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: #344054; }
+    .card-media-list { display: flex; flex-direction: column; gap: 8px; }
+    .card-link-group { display: flex; flex-wrap: wrap; gap: 8px; }
+    .card-link-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; color: #fff; cursor: pointer; transition: opacity .2s; }
+    .card-link-btn:hover { opacity: .85; }
+
+    /* ── 테마 ── */
+    .theme-product  { background: linear-gradient(135deg, #f0f7ff, #f8fbff); }
+    .theme-product  .card-tag  { background: #dbeafe; color: #1d4ed8; }
+    .theme-product  .card-tit em { background-image: linear-gradient(90deg, #1d4ed8, #60a5fa); }
+    .theme-product  .card-link-btn { background: #2563eb; }
+
+    .theme-live     { background: linear-gradient(135deg, #fff0f0, #fff7f7); }
+    .theme-live     .card-tag  { background: #fee2e2; color: #b91c1c; }
+    .theme-live     .card-tit em { background-image: linear-gradient(90deg, #dc2626, #f87171); }
+    .theme-live     .card-link-btn { background: #ef4444; }
+
+    .theme-service  { background: linear-gradient(135deg, #f0fdf8, #f7fffe); }
+    .theme-service  .card-tag  { background: #ccfbf1; color: #0f766e; }
+    .theme-service  .card-tit em { background-image: linear-gradient(90deg, #0d9488, #34d399); }
+    .theme-service  .card-link-btn { background: #0f766e; }
+
+    .theme-sales    { background: linear-gradient(135deg, #fff0f9, #fdf8ff); }
+    .theme-sales    .card-tag  { background: #fce7f3; color: #be185d; }
+    .theme-sales    .card-tit em { background-image: linear-gradient(90deg, #db2777, #f472b6); }
+    .theme-sales    .card-link-btn { background: #db2777; }
+
+    .theme-ai       { background: linear-gradient(135deg, #f6f3ff, #faf8ff); }
+    .theme-ai       .card-tag  { background: #ede9fe; color: #6d28d9; }
+    .theme-ai       .card-tit em { background-image: linear-gradient(90deg, #7c3aed, #a78bfa); }
+    .theme-ai       .card-link-btn { background: #7c3aed; }
+
+    .theme-speech   { background: linear-gradient(135deg, #fff7ed, #fffaf5); }
+    .theme-speech   .card-tag  { background: #ffedd5; color: #c2410c; }
+    .theme-speech   .card-tit em { background-image: linear-gradient(90deg, #ea580c, #fb923c); }
+    .theme-speech   .card-link-btn { background: #ea580c; }
+
+    .theme-story    { background: linear-gradient(135deg, #f0fdf4, #f7fff9); }
+    .theme-story    .card-tag  { background: #dcfce7; color: #15803d; }
+    .theme-story    .card-tit em { background-image: linear-gradient(90deg, #16a34a, #4ade80); }
+    .theme-story    .card-link-btn { background: #16a34a; }
+
+    .theme-needs    { background: linear-gradient(135deg, #fefce8, #fffef5); }
+    .theme-needs    .card-tag  { background: #fef9c3; color: #b45309; }
+    .theme-needs    .card-tit em { background-image: linear-gradient(90deg, #d97706, #fbbf24); }
+    .theme-needs    .card-link-btn { background: #d97706; }
+
+    .theme-default  { background: linear-gradient(135deg, #f5f3ff, #fdf4ff); }
+    .theme-default  .card-tag  { background: #e9d5ff; color: #7e22ce; }
+    .theme-default  .card-tit em { background-image: linear-gradient(90deg, #9333ea, #c084fc); }
+    .theme-default  .card-link-btn { background: #9333ea; }
+
+    /* ── Info Card (Video / Audio) ── */
+    .info-card { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid #ddd; border-radius: 12px; background: #fff; cursor: pointer; }
+    .info-card + .info-card { margin-top: 8px; }
+    .info-thumb { flex-shrink: 0; position: relative; width: 60px; height: 60px; border-radius: 8px; background: #eee; overflow: hidden; }
+    .info-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .info-play-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; background: rgba(0,0,0,.25); }
+    .info-text { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .info-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+    .info-tag { padding: 1px 7px; border-radius: 4px; background: #f1f1f1; font-size: 11px; color: #555; }
+    .info-title { font-size: 13px; font-weight: 600; color: #364153; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .info-btm { display: flex; justify-content: space-between; align-items: center; }
+    .info-time { font-size: 12px; color: #90a1b9; }
+    .info-views { font-size: 12px; color: #364153; }
+
+    /* ── 추천숏츠 (SectionRecommendVideo) ── */
+    .rv-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .rv-card { display: flex; flex-direction: column; border-radius: 20px; overflow: hidden; background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,.1); cursor: pointer; transition: transform .2s, box-shadow .2s; }
+    .rv-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,.16); }
+    .rv-thumb { position: relative; width: 100%; padding-top: 72%; background: #1a1a2e; overflow: hidden; }
+    .rv-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .rv-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.5), transparent); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .2s; }
+    .rv-card:hover .rv-overlay { opacity: 1; }
+    .rv-play { width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,.9); display: flex; align-items: center; justify-content: center; font-size: 14px; color: #d14a6a; }
+    .rv-dur { position: absolute; bottom: 10px; right: 10px; padding: 2px 7px; border-radius: 4px; background: rgba(0,0,0,.65); color: #fff; font-size: 11px; }
+    .rv-body { padding: 13px 15px 15px; display: flex; flex-direction: column; gap: 5px; }
+    .rv-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+    .rv-tag { padding: 2px 7px; border-radius: 4px; background: #f3eeff; color: #8b5cf6; font-size: 11px; font-weight: 600; }
+    .rv-title { font-size: 13px; font-weight: 700; color: #101828; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .rv-meta { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+    .rv-views { font-size: 12px; color: #667085; font-weight: 500; }
+
+    /* ── 추천팟캐스트 (SectionRecommendAudio) ── */
+    .ra-wrap { display: flex; flex-direction: column; gap: 12px; }
+    .ra-card { display: flex; align-items: center; gap: 16px; padding: 18px 20px; border-radius: 16px; background: linear-gradient(135deg, #f5f3ff, #ede9fe); border: 1px solid #ddd6fe; cursor: pointer; transition: transform .2s, box-shadow .2s; }
+    .ra-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(124,58,237,.15); }
+    .ra-icon { flex-shrink: 0; }
+    .ra-content { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .ra-tags { display: flex; gap: 5px; }
+    .ra-tag { padding: 2px 7px; border-radius: 4px; background: #ede9fe; color: #6d28d9; font-size: 11px; font-weight: 600; }
+    .ra-title { font-size: 14px; font-weight: 700; color: #1e1b4b; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .ra-meta { display: flex; align-items: center; gap: 12px; }
+    .ra-dur, .ra-views { font-size: 12px; color: #7c3aed; opacity: .7; }
+    .ra-play { flex-shrink: 0; display: flex; align-items: center; gap: 5px; padding: 8px 15px; border-radius: 30px; background: #7c3aed; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .2s; }
+    .ra-play:hover { background: #6d28d9; }
+
+    /* ── 인기숏츠 (SectionPopularVideo) ── */
+    .pv-wrap { display: flex; flex-direction: column; gap: 12px; }
+    .pv-card { display: flex; align-items: center; gap: 16px; padding: 14px 18px; border-radius: 16px; background: #101828; cursor: pointer; transition: background .2s; }
+    .pv-card:hover { background: #1a2438; }
+    .pv-rank { flex-shrink: 0; font-size: 32px; font-weight: 900; line-height: 1; background: linear-gradient(135deg, #ff7c7e, #ae74ff); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; min-width: 42px; }
+    .pv-thumb { flex-shrink: 0; position: relative; width: 88px; height: 62px; border-radius: 10px; overflow: hidden; background: #1e293b; }
+    .pv-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .pv-thumb-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; background: rgba(0,0,0,.2); }
+    .pv-dur { position: absolute; bottom: 3px; right: 3px; padding: 1px 5px; border-radius: 3px; background: rgba(0,0,0,.7); color: #fff; font-size: 10px; }
+    .pv-info { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .pv-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+    .pv-tag { padding: 2px 7px; border-radius: 4px; background: rgba(174,116,255,.15); color: #c27aff; font-size: 11px; }
+    .pv-title { font-size: 13px; font-weight: 600; color: #fff; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .pv-views { font-size: 12px; color: #667085; }
+
+    /* ── 인기팟캐스트 (SectionPopularAudio) ── */
+    .pa-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .pa-card { display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border-radius: 16px; background: #101828; cursor: pointer; transition: background .2s; }
+    .pa-card:hover { background: #1a2438; }
+    .pa-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .pa-rank { font-size: 26px; font-weight: 900; line-height: 1; background: linear-gradient(135deg, #ff7c7e, #ae74ff); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    .pa-tags { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+    .pa-tag { padding: 2px 6px; border-radius: 4px; background: rgba(174,116,255,.15); color: #c27aff; font-size: 11px; }
+    .pa-title { font-size: 13px; font-weight: 700; color: #fff; line-height: 1.45; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .pa-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .pa-meta { display: flex; align-items: center; gap: 8px; }
+    .pa-dur, .pa-views { font-size: 12px; color: #667085; }
+    .pa-play { width: 32px; height: 32px; border-radius: 50%; background: rgba(174,116,255,.2); display: flex; align-items: center; justify-content: center; cursor: pointer; border: none; transition: background .2s; font-size: 12px; color: #c27aff; }
+    .pa-play:hover { background: rgba(174,116,255,.4); }
+
+    /* ── 고지 문구 ── */
+    .txt-impor { max-width: 740px; margin: 0 auto; padding: 15px 30px; font-size: 12px; color: #98a2b3; line-height: 1.6; }
+
+    @media (max-width: 600px) {
+      .quickmenu-grid { grid-template-columns: repeat(2, 1fr); }
+      .rv-wrap { grid-template-columns: 1fr; }
+      .pa-wrap { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="cont-recommend" id="app"></div>
+
+<script>
+/* ================================================================
+ * 스키마 (Schema / Mock Data)
+ * ================================================================ */
+
+const TAG_THEME = {
+  '이번 달 신상품': 'product',
+  '이번 달 핫이슈': 'product',
+  '상품·보장': 'product',
+  '상품 소개': 'product',
+  '질병 통계 LIVE': 'live',
+  '서비스': 'service',
+  '사랑On': 'sales',
+  '프팡맨': 'sales',
+  'AI서치': 'ai',
+  '오늘의 화법': 'speech',
+  '동구 시리즈': 'story',
+  '힐링 타임': 'story',
+  '안심주파수': 'story',
+  '니즈 환기': 'needs',
+}
+
+const LINK_TYPE_MAP = {
+  compass: '/sales/product-info',
+  bible: '/sales/design-bible',
+  live: '#live',
+}
+
+const CARD_DATA = [
+  { object_id:'6a33b4e5179e15063cd24cf5', top_tag:'이번 달 신상품', top_text:'암치료플러스종신보험', bottom_text:'집중 분석할 시간!', desc:'', order:1, audios:[{ object_id:'6a33b4e540bbd5eaa5bc444f', title:'[핵심요약] 암치료플러스종신보험', tags:['상품'], duration:'00:05:58', views:248, thumbnail:'' }], videos:[{ object_id:'6a33b4e540bbd5eaa5bc44a2', title:'[집중공략] 암치료플러스종신 1탄', tags:['상품'], duration:'00:00:37', views:962, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-ff9c5ca9e11530b9.jpg' },{ object_id:'6a33b4e540bbd5eaa5bc44a3', title:'[집중공략] 암치료플러스종신 2탄', tags:['상품'], duration:'00:00:33', views:554, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-86a876e67b748a0d.jpg' },{ object_id:'6a33b4e540bbd5eaa5bc44a4', title:'[집중공략] 암치료플러스종신 3탄', tags:['상품'], duration:'00:00:33', views:465, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-ae96afe4871542a3.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24cf6', top_tag:'질병 통계 LIVE', top_text:'알아야 설득할 수 있습니다', bottom_text:'통계·치료·비급여까지', desc:'고객 상담에 필요한 질병 통계, 치료 여정, 비급여 정보를 쉽게 확인하세요.', order:2, audios:[], videos:[], links:[{ name:'바로 확인하기', link_type:'live' }] },
+  { object_id:'6a33b4e5179e15063cd24cf7', top_tag:'상품·보장', top_text:'암치료플러스종신보험', bottom_text:'신나게 핵심만 쏙쏙!', desc:'', order:3, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc44a5', title:'[핵심요약] 암+사망=암치플', tags:['상품'], duration:'00:00:45', views:418, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-b0617a1c6a8a70b6.jpg' }], links:[{ name:'명인의 실전 화법', link_type:'bible' }] },
+  { object_id:'6a33b4e5179e15063cd24cf8', top_tag:'상품·보장', top_text:'1분 상품퀴즈쇼', bottom_text:'암치료플러스종신보험', desc:'함께 풀어보아요!', order:4, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc44a6', title:"[1분퀴즈] 암치료플러스종신('26.6월 출시)", tags:['상품'], duration:'00:01:34', views:415, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/75621032.png' }], links:[{ name:'상품 물어보기', link_type:'compass' }] },
+  { object_id:'6a33b4e5179e15063cd24cf9', top_tag:'상품·보장', top_text:'암치료플러스종신보험', bottom_text:'암치료와 사망보장', desc:'암치료와 함께 커지는 사망보험금', order:5, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc44a7', title:'[보장] 암치료 후 사망보험금 증가', tags:['상품'], duration:'00:01:04', views:329, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-f3d408600fa8f80a.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24cfa', top_tag:'서비스', top_text:'삼성생명 건강케어서비스', bottom_text:'첫 걸음부터 함께합니다', desc:'', order:6, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc44a8', title:'[건강케어서비스] 삼성생명의 동행', tags:['고객·감동'], duration:'00:00:32', views:167, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-8ba33f3fe8cd5e29.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24cfb', top_tag:'서비스', top_text:'바쁜 고객을 대신해서', bottom_text:'삼성생명이 케어해드려요', desc:'', order:7, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc44a9', title:'[건강케어서비스] 바쁜 고객을 위해', tags:['고객·감동'], duration:'00:00:39', views:143, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-6ef54b8b92fc20d0.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24cfc', top_tag:'사랑On', top_text:'무슨 말을 보낼까', bottom_text:'AI문자로 고민 해결!', desc:'', order:8, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc44aa', title:'[AI문자] 무슨 말을 보낼지 고민될 때', tags:['사랑On'], duration:'00:00:46', views:217, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-3218fdc28b7c3a3f.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24cfd', top_tag:'AI서치', top_text:'AI서치가 처음이라면', bottom_text:'전부 소개해드릴게요!', desc:'', order:9, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc44ab', title:'[소개] AI서치에 들어와야하는 이유', tags:['AI서치'], duration:'00:00:45', views:213, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-b31078ef9ba7310f.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24cfe', top_tag:'이번 달 핫이슈', top_text:'간편보험 인수기준', bottom_text:'변경 내용 확인하세요', desc:'6월 24일부터 변경된대요!', order:10, audios:[{ object_id:'6a33b4e540bbd5eaa5bc444e', title:'[심사] 달라지는 간편보험 인수기준', tags:['정보'], duration:'00:02:30', views:717, thumbnail:'' }], videos:[{ object_id:'6a33b4e540bbd5eaa5bc449e', title:'[심사] 간편보험 인수기준 변경 1편', tags:['상품'], duration:'00:00:28', views:1990, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260604/06/20260604-e23d24cacc1bec44.jpg' },{ object_id:'6a33b4e540bbd5eaa5bc449f', title:'[심사] 간편보험 인수기준 변경 2편', tags:['상품'], duration:'00:00:24', views:1333, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260604/06/20260604-56127a3fc2d91fbb.jpg' },{ object_id:'6a33b4e540bbd5eaa5bc44a0', title:'[심사] 간편보험 인수기준 변경 3편', tags:['상품'], duration:'00:00:36', views:1067, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260604/06/20260604-b4c6fba557dae4df.jpg' }], links:[{ name:'상품 물어보기', link_type:'compass' }] },
+  { object_id:'6a33b4e5179e15063cd24cff', top_tag:'상품·보장', top_text:'간편 밸런스 종신보험', bottom_text:'묻고 더블로 가!', desc:'유병자 고객들에게 추천하세요!', order:11, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc44a1', title:'[유병자] 간편밸런스종신 묻고 더블로 가!', tags:['상품'], duration:'00:00:50', views:1455, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260604/06/20260604-1a3b8a979b33ebac.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24d00', top_tag:'사랑On', top_text:'사랑On 스토리', bottom_text:'사진 한장에 기록하기', desc:'', order:12, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc4499', title:'[스토리] FC님들이 은근 자주 깜빡하는 것', tags:['사랑On'], duration:'00:00:49', views:1228, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260604/06/20260604-1c2b2f773b8669a1.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24d01', top_tag:'프팡맨', top_text:'프리미엄고객사랑서비스', bottom_text:'선물 신청하세요 고객님', desc:'고객 응대 화법', order:13, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc449d', title:'[프사서] 프사서 신청하는 고객님께', tags:['상담스킬'], duration:'00:00:17', views:2373, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260604/06/20260604-c9de0416295d98c6.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24d02', top_tag:'프팡맨', top_text:'프리미엄고객사랑서비스', bottom_text:'선물은 택배로 보내주세요', desc:'거절 고객 응대화법', order:14, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc449c', title:'[프사서] 택배로 보내주세요 하는 고객님께', tags:['상담스킬'], duration:'00:00:17', views:1675, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260604/06/20260604-b91644939d122dc6.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24d03', top_tag:'오늘의 화법', top_text:'가족의 간병부담', bottom_text:'로봇수술 준비하세요', desc:'', order:15, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc4497', title:'[실전화법] 가족을 생각한다면 로봇수술', tags:['상담스킬'], duration:'00:00:29', views:794, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260602/01/20260602-eea6867ebb6c2a74.jpg' }], links:[{ name:'명인의 실전 화법', link_type:'bible' }] },
+  { object_id:'6a33b4e5179e15063cd24d04', top_tag:'오늘의 화법', top_text:'후유증 없는 삶', bottom_text:'로봇수술이 도와줄게요', desc:'', order:16, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc4498', title:'[실전화법] 후유증 없는 삶을 위한 로봇수술', tags:['상담스킬'], duration:'00:00:27', views:579, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260602/01/20260602-f1a1d45670840250.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24d05', top_tag:'상품·보장', top_text:'5월 론칭 신상품', bottom_text:'가족대표 건강보험', desc:'숏츠와 팟캐스트로 핵심만 확인해보세요', order:17, audios:[{ object_id:'6a33b4e540bbd5eaa5bc4444', title:'[핵심요약] 가족대표건강보험', tags:['상품'], duration:'00:05:54', views:2497, thumbnail:'' }], videos:[{ object_id:'6a33b4e540bbd5eaa5bc4489', title:'[집중공략] 가족대표건강보험-가족보장', tags:['상품'], duration:'00:01:08', views:6858, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260519/00/20260519-fefbcff29b36e73c.jpg' }], links:[{ name:'상품 물어보기', link_type:'compass' }] },
+  { object_id:'6a33b4e5179e15063cd24d06', top_tag:'상품·보장', top_text:'가족대표 건강보험', bottom_text:'판매 포인트: 핵심담보', desc:'핵심 담보만 빠르게 확인해보세요', order:18, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc448a', title:'[집중공략] 가족대표건강보험-핵심담보', tags:['상품'], duration:'00:00:56', views:2946, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260519/00/20260519-7b6ccf239dbcb827.jpg' }], links:[{ name:'상품 물어보기', link_type:'compass' }] },
+  { object_id:'6a33b4e5179e15063cd24d07', top_tag:'동구 시리즈', top_text:'암은 유전되지만', bottom_text:'보장은 유전되지 않아요', desc:'', order:19, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc4492', title:'[암] 보장도 유전이 될까?', tags:['보장이해'], duration:'00:00:35', views:497, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260519/00/20260519-77028a726e7a4649.jpg' }], links:[{ name:'명인의 실전 화법', link_type:'bible' }] },
+  { object_id:'6a33b4e5179e15063cd24d08', top_tag:'오늘의 화법', top_text:'언젠가 마주할', bottom_text:'가족력 이야기', desc:'가족력은 피할 수 없는 청구서', order:20, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc4496', title:'[실전화법] 가족력은 피할 수 없는 청구서', tags:['상담스킬'], duration:'00:00:20', views:444, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260519/00/20260519-bb0b9a66e8a55b9a.jpg' }], links:[{ name:'명인의 실전 화법', link_type:'bible' }] },
+  { object_id:'6a33b4e5179e15063cd24d09', top_tag:'오늘의 화법', top_text:'아이를 생각하면', bottom_text:'준비가 달라집니다', desc:'가족력 대비는 부모로서의 책임', order:21, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc4495', title:'[실전화법] 가족력은 부모로서의 책임', tags:['상담스킬'], duration:'00:00:20', views:475, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260519/00/20260519-d4bca499a93c2210.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24d0a', top_tag:'힐링 타임', top_text:'동구와 음악 산책', bottom_text:'좋은 음악, 함께 걸어요', desc:'FC님께 전하는 작은 위로와 응원', order:22, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc448c', title:'[음악] 너는 나의 히어로 (FC응원곡)', tags:['고객·감동'], duration:'00:02:57', views:472, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260507/05/20260507-c951dd54a687209b.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24d0b', top_tag:'니즈 환기', top_text:'경증 치매 보장', bottom_text:'치매보험의 필요성', desc:'', order:23, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc4493', title:'[치매] 경증치매 보장의 필요성', tags:['보장이해'], duration:'00:00:46', views:598, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260602/01/20260602-cc02f17d356c3608.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24d0c', top_tag:'안심주파수', top_text:'편안하게 들어보세요', bottom_text:'고객 감동 사연', desc:'이금희 아나운서가 소개합니다.', order:24, audios:[{ object_id:'6a33b4e540bbd5eaa5bc4445', title:'[고객사연] 고객들의 이야기 안심주파수 3,4편', tags:['고객·감동'], duration:'00:17:12', views:93, thumbnail:'' }], videos:[], links:[] },
+  { object_id:'6a33b4e5179e15063cd24d0d', top_tag:'사랑On', top_text:'AI시대의 적자생존', bottom_text:'스토리에 기록하세요', desc:'', order:25, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc4494', title:'[스토리] 기억되는 FC는 기록하는 FC', tags:['사랑On'], duration:'00:00:49', views:549, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260602/01/20260602-f2c2aeae76c52ca7.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24d0e', top_tag:'동구 시리즈', top_text:'동구가 알려주는', bottom_text:'암보장 이야기', desc:'동구는 암세포와 무슨 거래를 하는 걸까요?', order:26, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc447a', title:'[암] 암진단비, 왜 필요할까', tags:['보장이해'], duration:'00:00:24', views:1308, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260423/09/20260423-dc5259591024ea02.jpg' }], links:[] },
+  { object_id:'6a33b4e5179e15063cd24d0f', top_tag:'상품 소개', top_text:'4월 론칭 개정상품', bottom_text:'New플러스원 건강보험', desc:'숏츠와 팟캐스트로 핵심만 빠르게 확인해요~', order:27, audios:[{ object_id:'6a33b4e540bbd5eaa5bc4441', title:'[핵심요약] New플러스원건강보험', tags:['상품'], duration:'00:05:15', views:1411, thumbnail:'' }], videos:[{ object_id:'6a33b4e540bbd5eaa5bc4478', title:'[핵심요약] New플러스원 건강보험', tags:['상품'], duration:'00:01:29', views:3445, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260423/09/20260423-149ec031d6c8267f.jpg' }], links:[{ name:'상품 물어보기', link_type:'compass' }] },
+  { object_id:'6a33b4e5179e15063cd24d10', top_tag:'동구 시리즈', top_text:'동구가 알려주는', bottom_text:'New플러스원 이야기', desc:'치매와 장기요양 대비에 좋다고요~ ', order:28, audios:[], videos:[{ object_id:'6a33b4e540bbd5eaa5bc4479', title:'[치매/LTC] New플러스원 치매·장기요양', tags:['보장이해'], duration:'00:00:22', views:1580, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260423/09/20260423-475a66ed23fab93c.jpg' }], links:[{ name:'상품 물어보기', link_type:'compass' }] },
+]
+
+const SCORE_VIDEOS = [
+  { object_id:'6a33b4e540bbd5eaa5bc44a2', title:'[집중공략] 암치료플러스종신 1탄', tags:['상품'], duration:'00:00:37', views:962, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-ff9c5ca9e11530b9.jpg', score:0.0024 },
+  { object_id:'6a33b4e540bbd5eaa5bc44a3', title:'[집중공략] 암치료플러스종신 2탄', tags:['상품'], duration:'00:00:33', views:554, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-86a876e67b748a0d.jpg', score:0.0022 },
+  { object_id:'6a33b4e540bbd5eaa5bc44a2', title:'[집중공략] 암치료플러스종신 1탄', tags:['상품'], duration:'00:00:37', views:962, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-ff9c5ca9e11530b9.jpg', score:0.0024 },
+  { object_id:'6a33b4e540bbd5eaa5bc44a3', title:'[집중공략] 암치료플러스종신 2탄', tags:['상품'], duration:'00:00:33', views:554, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-86a876e67b748a0d.jpg', score:0.0022 },
+]
+
+const SCORE_AUDIOS = [
+  { object_id:'6a33b4e540bbd5eaa5bc444f', title:'[핵심요약] 암치료플러스종신보험', tags:['상품'], duration:'00:05:58', views:248, thumbnail:'', score:0.00193 },
+  { object_id:'6a33b4e540bbd5eaa5bc444e', title:'[심사] 달라지는 간편보험 인수기준', tags:['정보'], duration:'00:02:30', views:717, thumbnail:'', score:0.00135 },
+]
+
+const RANK_VIDEOS = [
+  { object_id:'6a33b4e540bbd5eaa5bc44a2', title:'[집중공략] 암치료플러스종신 1탄', tags:['상품'], duration:'00:00:37', views:962, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-ff9c5ca9e11530b9.jpg', score:0.0024 },
+  { object_id:'6a33b4e540bbd5eaa5bc44a3', title:'[집중공략] 암치료플러스종신 2탄', tags:['상품'], duration:'00:00:33', views:554, thumbnail:'https://samsung-life.zcdn.kollus.com/kr/snapshot/samsung-life/20260618/01/20260618-86a876e67b748a0d.jpg', score:0.0022 },
+]
+
+const RANK_AUDIOS = [
+  { object_id:'6a33b4e540bbd5eaa5bc444f', title:'[핵심요약] 암치료플러스종신보험', tags:['상품'], duration:'00:05:58', views:248, thumbnail:'', score:0.00193 },
+  { object_id:'6a33b4e540bbd5eaa5bc444e', title:'[심사] 달라지는 간편보험 인수기준', tags:['정보'], duration:'00:02:30', views:717, thumbnail:'', score:0.00135 },
+]
+
+/* ================================================================
+ * 유틸리티
+ * ================================================================ */
+function fv(n) {
+  if (!n) return 0
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
+  return n
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+function getTheme(tag) { return TAG_THEME[tag] || 'default' }
+
+/* ── SVG 아이콘 ── */
+const SVG = {
+  play:  `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 3l8 5-8 5V3z" fill="currentColor"/></svg>`,
+  eye:   `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>`,
+  clock: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M7 4v3.5l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  arrow: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  wave:  `<svg width="36" height="36" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="18" fill="#7c3aed" fill-opacity="0.12"/><path d="M12 14v8M15 11v14M18 13v10M21 11v14M24 14v8" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/></svg>`,
+  prdinfo:`<svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="9" stroke="#344054" stroke-width="1.5"/><path d="M11 7v5M11 14v1" stroke="#344054" stroke-width="2" stroke-linecap="round"/></svg>`,
+  bible: `<svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="3" y="3" width="16" height="16" rx="2" stroke="#344054" stroke-width="1.5"/><path d="M7 8h8M7 11h8M7 14h5" stroke="#344054" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  under: `<svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 3v9m0 0l-3-3m3 3l3-3" stroke="#344054" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16h14" stroke="#344054" stroke-width="1.5" stroke-linecap="round"/><path d="M4 19h14" stroke="#344054" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  terms: `<svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M6 3h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="#344054" stroke-width="1.5"/><path d="M8 8h6M8 11h6M8 14h4" stroke="#344054" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+}
+
+/* ================================================================
+ * 렌더링 함수
+ * ================================================================ */
+
+function renderSection(title, content, badge) {
+  const badgeHtml = badge ? `<span class="section-badge badge-popular">${esc(badge)}</span>` : ''
+  return `
+    <div class="section">
+      <div class="section-header"><h3>${esc(title)}</h3>${badgeHtml}</div>
+      ${content}
+    </div>`
+}
+
+function renderQuickMenu() {
+  const menus = [
+    { label:'상품나침반',     icon: SVG.prdinfo, href:'/sales/product-info' },
+    { label:'보장설계 바이블', icon: SVG.bible,   href:'/sales/design-bible' },
+    { label:'간편 언더라이팅', icon: SVG.under,   href:'/sales/under' },
+    { label:'약관조회',       icon: SVG.terms,   href:'/sales/terms' },
+  ]
+  const btns = menus.map(m => `
+    <a href="${m.href}" class="qm-btn">
+      <span class="qm-icon">${m.icon}</span>
+      <span>${esc(m.label)}</span>
+    </a>`).join('')
+  return `<div class="section"><div class="quickmenu-grid">${btns}</div></div>`
+}
+
+function renderInfoCard(item, type) {
+  const thumb = item.thumbnail
+    ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy" />`
+    : ''
+  const tags = (item.tags||[]).map(t => `<span class="info-tag">${esc(t)}</span>`).join('')
+  return `
+    <div class="info-card">
+      <div class="info-thumb">${thumb}<div class="info-play-icon">${SVG.play}</div></div>
+      <div class="info-text">
+        <div class="info-tags">${tags}</div>
+        <p class="info-title">${esc(item.title)}</p>
+        <div class="info-btm">
+          <span class="info-time">${SVG.clock} ${esc(item.duration)}</span>
+          <span class="info-views">${SVG.eye} ${fv(item.views)}</span>
+        </div>
+      </div>
+    </div>`
+}
+
+function renderCardList() {
+  const cards = CARD_DATA.map(card => {
+    const theme = getTheme(card.top_tag)
+    const desc = card.desc ? `<p class="card-desc">${esc(card.desc)}</p>` : ''
+    const videos = card.videos && card.videos.length
+      ? `<div class="card-media-group">
+           <p class="card-media-label">${SVG.play} 숏츠</p>
+           <div class="card-media-list">${card.videos.map(v => renderInfoCard(v,'video')).join('')}</div>
+         </div>` : ''
+    const audios = card.audios && card.audios.length
+      ? `<div class="card-media-group">
+           <p class="card-media-label">${SVG.play} 팟캐스트</p>
+           <div class="card-media-list">${card.audios.map(a => renderInfoCard(a,'audio')).join('')}</div>
+         </div>` : ''
+    const links = card.links && card.links.length
+      ? `<div class="card-link-group">${card.links.map(l =>
+          `<a href="${LINK_TYPE_MAP[l.link_type]||'#'}" class="card-link-btn">${esc(l.name)} ${SVG.arrow}</a>`
+        ).join('')}</div>` : ''
+    return `
+      <div class="card-item theme-${theme}">
+        <div class="card-header">
+          <span class="card-tag">${esc(card.top_tag)}</span>
+          <p class="card-tit">${esc(card.top_text)}<em>${esc(card.bottom_text)}</em></p>
+          ${desc}
+        </div>
+        ${videos}${audios}${links}
+      </div>`
+  }).join('')
+  return `<div class="section"><div class="card-list">${cards}</div></div>`
+}
+
+function renderRecommendVideo(items) {
+  const cards = items.map(item => `
+    <div class="rv-card">
+      <div class="rv-thumb">
+        ${item.thumbnail ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy" />` : ''}
+        <div class="rv-overlay"><div class="rv-play">${SVG.play}</div></div>
+        <span class="rv-dur">${esc(item.duration)}</span>
+      </div>
+      <div class="rv-body">
+        <div class="rv-tags">${(item.tags||[]).map(t=>`<span class="rv-tag">${esc(t)}</span>`).join('')}</div>
+        <p class="rv-title">${esc(item.title)}</p>
+        <div class="rv-meta"><span class="rv-views">${SVG.eye} ${fv(item.views)}</span></div>
+      </div>
+    </div>`).join('')
+  return renderSection('지금 뜨는 숏츠', `<div class="rv-wrap">${cards}</div>`)
+}
+
+function renderRecommendAudio(items) {
+  const cards = items.map(item => `
+    <div class="ra-card">
+      <div class="ra-icon">${SVG.wave}</div>
+      <div class="ra-content">
+        <div class="ra-tags">${(item.tags||[]).map(t=>`<span class="ra-tag">${esc(t)}</span>`).join('')}</div>
+        <p class="ra-title">${esc(item.title)}</p>
+        <div class="ra-meta">
+          <span class="ra-dur">${SVG.clock} ${esc(item.duration)}</span>
+          <span class="ra-views">${SVG.eye} ${fv(item.views)}</span>
+        </div>
+      </div>
+      <button class="ra-play">${SVG.play} 듣기</button>
+    </div>`).join('')
+  return renderSection('지금 바로 들어봐요', `<div class="ra-wrap">${cards}</div>`)
+}
+
+function renderPopularVideo(items) {
+  const cards = items.map((item, idx) => `
+    <div class="pv-card">
+      <span class="pv-rank">${String(idx+1).padStart(2,'0')}</span>
+      <div class="pv-thumb">
+        ${item.thumbnail ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy" />` : ''}
+        <div class="pv-thumb-play">${SVG.play}</div>
+        <span class="pv-dur">${esc(item.duration)}</span>
+      </div>
+      <div class="pv-info">
+        <div class="pv-tags">${(item.tags||[]).map(t=>`<span class="pv-tag">${esc(t)}</span>`).join('')}</div>
+        <p class="pv-title">${esc(item.title)}</p>
+        <div class="pv-meta"><span class="pv-views">${SVG.eye} ${fv(item.views)}</span></div>
+      </div>
+    </div>`).join('')
+  return renderSection('인기숏츠', `<div class="pv-wrap">${cards}</div>`, 'HOT')
+}
+
+function renderPopularAudio(items) {
+  const cards = items.map((item, idx) => `
+    <div class="pa-card">
+      <div class="pa-top">
+        <span class="pa-rank">${String(idx+1).padStart(2,'0')}</span>
+        <div class="pa-tags">${(item.tags||[]).map(t=>`<span class="pa-tag">${esc(t)}</span>`).join('')}</div>
+      </div>
+      <p class="pa-title">${esc(item.title)}</p>
+      <div class="pa-bottom">
+        <div class="pa-meta">
+          <span class="pa-dur">${SVG.clock} ${esc(item.duration)}</span>
+          <span class="pa-views">${SVG.eye} ${fv(item.views)}</span>
+        </div>
+        <button class="pa-play">${SVG.play}</button>
+      </div>
+    </div>`).join('')
+  return renderSection('인기팟캐스트', `<div class="pa-wrap">${cards}</div>`, 'HOT')
+}
+
+/* ================================================================
+ * 초기화
+ * ================================================================ */
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('app').innerHTML = [
+    renderQuickMenu(),
+    renderCardList(),
+    renderRecommendVideo(SCORE_VIDEOS),
+    renderRecommendAudio(SCORE_AUDIOS),
+    renderPopularVideo(RANK_VIDEOS),
+    renderPopularAudio(RANK_AUDIOS),
+    `<p class="txt-impor">※ 본 시스템에서 제공되는 콘텐츠는 AI를 기반으로 생성, 제작되었으니 자세한 내용은 관련 지침과 자료를 확인하시기 바라며, 교육용 자료로 고객에게 제시/교부하거나 온라인 게시·전송할 수 없습니다.</p>`,
+  ].join('\n')
+})
+</script>
+</body>
+</html>
