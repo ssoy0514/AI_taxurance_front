@@ -101,6 +101,13 @@ export default {
         },
       })
     },
+    getLinkPath(link_type) {
+      const routes = {
+        compass: '/sales/product-info',
+        design_bible: '/sales/design-bible',
+      }
+      return routes[link_type] || '/'
+    },
   },
   mounted() {
     this.setWidth()
@@ -159,11 +166,7 @@ export default {
                 v-for="(link, i) in item.links"
                 :key="i"
                 class="btn-link"
-                :to="
-                  link.link_type === 'compass'
-                    ? '/sales/product-info'
-                    : '/sales/design-bible'
-                "
+                :to="getLinkPath(link.link_type)"
               >
                 {{ link.name }}<i class="icon-m icon-arrow-link"></i>
               </nuxt-link>
