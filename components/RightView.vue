@@ -42,8 +42,8 @@ export default {
   },
   created() {},
   mounted() {
-    this.fetchRankAudios()
-    this.fetchRankVideos()
+    // this.fetchRankAudios()
+    // this.fetchRankVideos()
   },
 
   beforeDestroy() {},

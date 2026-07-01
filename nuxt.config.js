@@ -64,18 +64,15 @@ export default {
   },
   modules: ['@nuxtjs/axios', '@nuxtjs/proxy'],
   axios: {
-    proxy: true, // axios 요청을 proxy 설정을 통해 보내도록 설정
-    prefix: '/api/v1', // 모든 axios 요청 앞에 /api 프리픽스 자동 추가
-    // timeout: Number(process.env.AXIOS_TIMEOUT || 3000),
-    credentials: true, // 쿠키 기반 인증 시
+    proxy: true,
+    prefix: '/api',
   },
   proxy: {
-    '/api/v1': {
-      target: process.env.API_BASE_URL || 'http://localhost:5200',
-      pathRewrite: { '^/api/v1': '' },
+    '/api/': {
+      target: process.env.API_BASE_URL,
+      pathRewrite: { '^/api': '' },
       changeOrigin: true,
       secure: false,
-      selfHandleResponse: false, // 스트리밍 응답 버퍼링 방지
     },
   },
   plugins: [

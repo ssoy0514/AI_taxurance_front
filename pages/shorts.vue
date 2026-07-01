@@ -31,7 +31,7 @@ export default {
   created() {},
   mounted() {
     this.fetchList()
-    this.fetchRankList()
+    // this.fetchRankList()
   },
 
   beforeDestroy() {},

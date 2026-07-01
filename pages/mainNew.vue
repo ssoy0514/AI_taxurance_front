@@ -1,83 +1,113 @@
 <script>
-import Video from '@/components/Video.vue'
-import Audio from '@/components/Audio.vue'
+import MainCardItem from '@/components/MainCardItem.vue'
 import SectionRecommendVideo from '@/components/SectionRecommendVideo.vue'
 import SectionRecommendAudio from '@/components/SectionRecommendAudio.vue'
-import SectionPopularVideo from '@/components/SectionPopularVideo.vue'
-import SectionPopularAudio from '@/components/SectionPopularAudio.vue'
-import {
-  mianCard,
-  scoreVideos,
-  scoreAudios,
-  rankVideos,
-  rankAudios,
-} from '@/utils/mockApi'
+import SectionPopularTop3 from '@/components/SectionPopularTop3.vue'
+import { scoreVideos, scoreAudios, rankVideos, rankAudios } from '@/utils/mockApi'
+
+// time_type: '0'=중요(항상 노출) '1'=오전(06~09) '2'=낮(10~13) '3'=오후(14~18) '4'=밤(19~05)
+const TIME_TYPE_LABEL = { 1: '오전', 2: '낮', 3: '오후', 4: '밤' }
 
 export default {
   name: 'mainNew',
   components: {
-    Video,
-    Audio,
+    MainCardItem,
     SectionRecommendVideo,
     SectionRecommendAudio,
-    SectionPopularVideo,
-    SectionPopularAudio,
+    SectionPopularTop3,
   },
 
   data() {
     return {
-      cards: [],
+      importantCards: [],
+      currentTimeCards: [],
+      currentPhrase: '',
+      otherTimeGroups: [],
+      topmostEvents: [],
+      topEvents: [],
       recommVideos: [],
       recommAudios: [],
-      popularVideos: [],
-      popularAudios: [],
+      top3Items: [],
     }
   },
 
-  mounted() {
-    const TAG_THEME = {
-      '이번 달 신상품': 'product',
-      '이번 달 핫이슈': 'product',
-      '상품·보장': 'product',
-      '상품 소개': 'product',
-      '질병 통계 LIVE': 'live',
-      서비스: 'service',
-      사랑On: 'sales',
-      프팡맨: 'sales',
-      AI서치: 'ai',
-      '오늘의 화법': 'speech',
-      '동구 시리즈': 'story',
-      '힐링 타임': 'story',
-      안심주파수: 'story',
-      '니즈 환기': 'needs',
-    }
-    this.cards = mianCard().map((card) => ({
-      ...card,
-      theme: TAG_THEME[card.top_tag] || 'default',
-    }))
+  async mounted() {
+    await Promise.all([this.loadMainCards(), this.loadEvents()])
     this.recommVideos = scoreVideos()
     this.recommAudios = scoreAudios()
-    this.popularVideos = rankVideos()
-    this.popularAudios = rankAudios()
+
+    const videos = rankVideos().map((v) => ({ ...v, contentType: 'videos' }))
+    const audios = rankAudios().map((a) => ({ ...a, contentType: 'audios' }))
+    this.top3Items = [...videos, ...audios]
+      .sort((a, b) => (b.views || 0) - (a.views || 0))
+      .slice(0, 3)
   },
 
   methods: {
-    viewVideo(item) {
-      this.$router.push({
-        name: 'play',
-        query: { type: 'videos', tab: item.tags[0], id: item.object_id },
-      })
+    getCurrentTimeType() {
+      const hour = new Date().getHours()
+      if (hour >= 6 && hour < 10) return '1'
+      if (hour >= 10 && hour < 14) return '2'
+      if (hour >= 14 && hour < 19) return '3'
+      return '4'
     },
-    viewAudio(item) {
-      this.$router.push({
-        name: 'play',
-        query: { type: 'audios', tab: item.tags[0], id: item.object_id },
-      })
+    pickRandomPhrase(phrases, timeType) {
+      const list = phrases.filter((p) => p.time_type === timeType && p.enabled)
+      if (list.length === 0) return ''
+      return list[Math.floor(Math.random() * list.length)].text
     },
-    goToLink(linkType) {
-      this.$router.push(
-        linkType === 'compass' ? '/sales/product-info' : '/sales/design-bible'
-      )
+    normalizeCard(card) {
+      return {
+        ...card,
+        videos: (card.videos || []).map((v) => v.content_info).filter(Boolean),
+        audios: (card.audios || []).map((a) => a.content_info).filter(Boolean),
+      }
+    },
+    async loadMainCards() {
+      const [cardRes, phraseRes] = await Promise.all([
+        this.$axios.get('/maincards'),
+        this.$axios.get('/phrases'),
+      ])
+      const cards = (cardRes.items || [])
+        .filter((c) => c.enabled)
+        .map(this.normalizeCard)
+      const phrases = phraseRes.items || []
+      const timeType = this.getCurrentTimeType()
+
+      this.importantCards = cards
+        .filter((c) => c.time_type === '0')
+        .sort((a, b) => a.sort_order - b.sort_order)
+      this.currentTimeCards = cards
+        .filter((c) => c.time_type === timeType)
+        .sort((a, b) => a.sort_order - b.sort_order)
+      this.currentPhrase = this.pickRandomPhrase(phrases, timeType)
+
+      this.otherTimeGroups = ['1', '2', '3', '4']
+        .filter((t) => t !== timeType)
+        .map((t) => ({
+          timeType: t,
+          label: TIME_TYPE_LABEL[t],
+          phrase: this.pickRandomPhrase(phrases, t),
+          cards: cards
+            .filter((c) => c.time_type === t)
+            .sort((a, b) => a.sort_order - b.sort_order),
+        }))
+        .filter((g) => g.cards.length > 0)
+    },
+    isEventActive(event) {
+      const now = new Date()
+      if (event.start_at && new Date(event.start_at) > now) return false
+      if (event.end_at && new Date(event.end_at) < now) return false
+      return true
+    },
+    async loadEvents() {
+      const res = await this.$axios.get('/events')
+      const events = (res.items || [])
+        .filter((e) => e.enabled && this.isEventActive(e))
+        .sort((a, b) => a.sort_order - b.sort_order)
+
+      this.topmostEvents = events.filter((e) => e.position === 'topmost')
+      this.topEvents = events.filter((e) => e.position === 'top')
     },
   },
 }
@@ -87,8 +117,13 @@ export default {
   <div class="contents">
     <div class="cont-main">
       <div class="cont-recommend scroll-y">
+        <!-- 시간대별 인사 문구 -->
+        <section v-if="currentPhrase" class="section-phrase">
+          <h2>{{ currentPhrase }}</h2>
+        </section>
+
         <!-- 퀵메뉴 -->
-        <section class="section-quickmenu">
+        <!-- <section class="section-quickmenu">
           <div class="quickmenu-grid">
             <nuxt-link to="/sales/product-info" class="qm-btn">
               <i class="icon-m icon-prd-info"></i>
@@ -107,74 +142,49 @@ export default {
               <span>약관조회</span>
             </nuxt-link>
           </div>
+        </section> -->
+
+        <!-- 이벤트 (최상단: 메인카드 중요보다 위) -->
+        <section v-if="topmostEvents.length > 0" class="section-cards">
+          <div class="card-list">
+            <MainCardItem
+              v-for="event in topmostEvents"
+              :key="'topmost-' + event.id"
+              :card="event"
+            />
+          </div>
         </section>
 
-        <!-- 메인카드리스트 -->
-        <section v-if="cards.length > 0" class="section-cards">
+        <!-- 메인카드 - 중요 -->
+        <section v-if="importantCards.length > 0" class="section-cards">
           <div class="card-list">
-            <div
-              v-for="(card, index) in cards"
-              :key="index"
-              :class="['card-item', 'theme-' + (card.theme || 'default')]"
-            >
-              <div class="card-header">
-                <span class="card-tag">{{ card.top_tag }}</span>
-                <p class="card-tit">
-                  {{ card.top_text }}
-                  <em>{{ card.bottom_text }}</em>
-                </p>
-                <p v-if="card.desc" class="card-desc">{{ card.desc }}</p>
-              </div>
+            <MainCardItem
+              v-for="card in importantCards"
+              :key="card.id"
+              :card="card"
+            />
+          </div>
+        </section>
 
-              <div
-                v-if="card.videos && card.videos.length > 0"
-                class="card-media-group"
-              >
-                <p class="card-media-label">
-                  <i class="icon-m icon-play"></i>숏츠
-                </p>
-                <div class="card-media-list">
-                  <Video
-                    v-for="(v, vi) in card.videos"
-                    :key="'v' + vi"
-                    :video="v"
-                    type="link"
-                  />
-                </div>
-              </div>
+        <!-- 이벤트 (상단: 메인카드 중요보다 아래) -->
+        <section v-if="topEvents.length > 0" class="section-cards">
+          <div class="card-list">
+            <MainCardItem
+              v-for="event in topEvents"
+              :key="'top-' + event.id"
+              :card="event"
+            />
+          </div>
+        </section>
 
-              <div
-                v-if="card.audios && card.audios.length > 0"
-                class="card-media-group"
-              >
-                <p class="card-media-label">
-                  <i class="icon-m icon-play"></i>팟캐스트
-                </p>
-                <div class="card-media-list">
-                  <Audio
-                    v-for="(a, ai) in card.audios"
-                    :key="'a' + ai"
-                    :audio="a"
-                    type="link"
-                  />
-                </div>
-              </div>
-
-              <div
-                v-if="card.links && card.links.length > 0"
-                class="card-link-group"
-              >
-                <button
-                  v-for="(link, li) in card.links"
-                  :key="'l' + li"
-                  class="card-link-btn"
-                  @click="goToLink(link.link_type)"
-                >
-                  {{ link.name }}
-                  <i class="icon-m icon-arrow-link"></i>
-                </button>
-              </div>
-            </div>
+        <!-- 메인카드 - 현재 시간대 -->
+        <section v-if="currentTimeCards.length > 0" class="section-cards">
+          <div class="card-list">
+            <MainCardItem
+              v-for="card in currentTimeCards"
+              :key="card.id"
+              :card="card"
+            />
           </div>
         </section>
 
@@ -194,22 +204,31 @@ export default {
           <SectionRecommendAudio :items="recommAudios" />
         </section>
 
-        <!-- 인기숏츠 -->
-        <section v-if="popularVideos.length > 0" class="section-block">
+        <!-- 인기 TOP3 -->
+        <section v-if="top3Items.length > 0" class="section-block">
           <div class="section-header">
-            <h3>인기숏츠</h3>
+            <h3>인기 TOP3</h3>
             <span class="section-badge section-badge--popular">HOT</span>
           </div>
-          <SectionPopularVideo :items="popularVideos" />
+          <SectionPopularTop3 :items="top3Items" />
         </section>
 
-        <!-- 인기팟캐스트 -->
-        <section v-if="popularAudios.length > 0" class="section-block">
-          <div class="section-header">
-            <h3>인기팟캐스트</h3>
-            <span class="section-badge section-badge--popular">HOT</span>
+        <!-- 다른 시간대 콘텐츠 -->
+        <section
+          v-for="group in otherTimeGroups"
+          :key="group.timeType"
+          class="section-cards"
+        >
+          <!-- <div class="section-header">
+            <h3>{{ group.phrase || group.label + ' 추천 콘텐츠' }}</h3>
+          </div> -->
+          <div class="card-list">
+            <MainCardItem
+              v-for="card in group.cards"
+              :key="card.id"
+              :card="card"
+            />
           </div>
-          <SectionPopularAudio :items="popularAudios" />
         </section>
       </div>
       <div class="txt-impor">
@@ -237,7 +256,7 @@ section {
   padding: 0 rem(30);
 
   &:not(:first-child) {
-    margin-top: rem(36);
+    margin-top: rem(30);
   }
 
   @media (max-width: 1440px) {
@@ -245,6 +264,16 @@ section {
   }
   @media (max-width: 768px) {
     max-width: 100%;
+  }
+}
+
+// 시간대별 인사 문구
+.section-phrase {
+  h2 {
+    font-size: rem(32);
+    font-weight: 800;
+    color: #101828;
+    line-height: 1.3;
   }
 }
 
@@ -351,248 +380,5 @@ section {
   display: flex;
   flex-direction: column;
   gap: rem(16);
-}
-
-// ── 카드 아이템 기본 구조 ──────────────────
-.card-item {
-  display: flex;
-  flex-direction: column;
-  gap: rem(20);
-  padding: rem(28) rem(30);
-  border-radius: rem(20);
-  position: relative;
-  overflow: hidden;
-  background: #f9fafb;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.card-header {
-  display: flex;
-  flex-direction: column;
-  gap: rem(10);
-  position: relative;
-  z-index: 1;
-
-  .card-tag {
-    display: inline-block;
-    padding: rem(5) rem(12);
-    border-radius: rem(20);
-    font-size: rem(20);
-    font-weight: 600;
-    align-self: flex-start;
-  }
-
-  .card-tit {
-    font-size: rem(32);
-    font-weight: 800;
-    color: #101828;
-    line-height: 1.3;
-
-    em {
-      display: block;
-      font-style: normal;
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-  }
-
-  .card-desc {
-    font-size: rem(20);
-    color: #667085;
-  }
-}
-
-.card-media-group {
-  display: flex;
-  flex-direction: column;
-  gap: rem(8);
-  position: relative;
-  z-index: 1;
-}
-
-.card-media-label {
-  display: flex;
-  align-items: center;
-  gap: rem(6);
-  font-size: rem(20);
-  font-weight: 600;
-  color: #344054;
-  i:before {
-    background: #344054;
-  }
-}
-
-.card-media-list {
-  display: flex;
-  flex-direction: column;
-  gap: rem(8);
-}
-
-.card-link-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: rem(10);
-  position: relative;
-  z-index: 1;
-}
-
-.card-link-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: rem(6);
-  padding: rem(10) rem(20);
-  border-radius: rem(12);
-  font-size: rem(20);
-  font-weight: 600;
-  transition: opacity 0.2s;
-  color: #fff;
-
-  &:hover {
-    opacity: 0.85;
-  }
-
-  i:before {
-    background: #fff;
-  }
-}
-
-// ── 테마별 스타일 ──────────────────────────
-// background-image 사용: background 단축 속성은 background-clip을 초기화하므로
-// .card-tit em의 gradient text가 깨지지 않도록 별도로 지정
-
-// product: 상품·보장, 이번 달 신상품, 핫이슈
-.card-item.theme-product {
-  background: linear-gradient(135deg, #f0f7ff, #f8fbff);
-  .card-tag {
-    background: #dbeafe;
-    color: #1d4ed8;
-  }
-  .card-tit em {
-    background-image: linear-gradient(90deg, #1d4ed8, #60a5fa);
-  }
-  .card-link-btn {
-    background: #2563eb;
-  }
-}
-
-// live: 질병 통계 LIVE
-.card-item.theme-live {
-  background: linear-gradient(135deg, #fff0f0, #fff7f7);
-  .card-tag {
-    background: #fee2e2;
-    color: #b91c1c;
-  }
-  .card-tit em {
-    background-image: linear-gradient(90deg, #dc2626, #f87171);
-  }
-  .card-link-btn {
-    background: #ef4444;
-  }
-}
-
-// service: 서비스
-.card-item.theme-service {
-  background: linear-gradient(135deg, #f0fdf8, #f7fffe);
-  .card-tag {
-    background: #ccfbf1;
-    color: #0f766e;
-  }
-  .card-tit em {
-    background-image: linear-gradient(90deg, #0d9488, #34d399);
-  }
-  .card-link-btn {
-    background: #0f766e;
-  }
-}
-
-// sales: 사랑On, 프팡맨
-.card-item.theme-sales {
-  background: linear-gradient(135deg, #fff0f9, #fdf8ff);
-  .card-tag {
-    background: #fce7f3;
-    color: #be185d;
-  }
-  .card-tit em {
-    background-image: linear-gradient(90deg, #db2777, #f472b6);
-  }
-  .card-link-btn {
-    background: #db2777;
-  }
-}
-
-// ai: AI서치
-.card-item.theme-ai {
-  background: linear-gradient(135deg, #f6f3ff, #faf8ff);
-  .card-tag {
-    background: #ede9fe;
-    color: #6d28d9;
-  }
-  .card-tit em {
-    background-image: linear-gradient(90deg, #7c3aed, #a78bfa);
-  }
-  .card-link-btn {
-    background: #7c3aed;
-  }
-}
-
-// speech: 오늘의 화법
-.card-item.theme-speech {
-  background: linear-gradient(135deg, #fff7ed, #fffaf5);
-  .card-tag {
-    background: #ffedd5;
-    color: #c2410c;
-  }
-  .card-tit em {
-    background-image: linear-gradient(90deg, #ea580c, #fb923c);
-  }
-  .card-link-btn {
-    background: #ea580c;
-  }
-}
-
-// story: 동구 시리즈, 힐링 타임, 안심주파수
-.card-item.theme-story {
-  background: linear-gradient(135deg, #f0fdf4, #f7fff9);
-  .card-tag {
-    background: #dcfce7;
-    color: #15803d;
-  }
-  .card-tit em {
-    background-image: linear-gradient(90deg, #16a34a, #4ade80);
-  }
-  .card-link-btn {
-    background: #16a34a;
-  }
-}
-
-// needs: 니즈 환기
-.card-item.theme-needs {
-  background: linear-gradient(135deg, #fefce8, #fffef5);
-  .card-tag {
-    background: #fef9c3;
-    color: #b45309;
-  }
-  .card-tit em {
-    background-image: linear-gradient(90deg, #d97706, #fbbf24);
-  }
-  .card-link-btn {
-    background: #d97706;
-  }
-}
-
-// default: 보라톤
-.card-item.theme-default {
-  background: linear-gradient(135deg, #f5f3ff, #fdf4ff);
-  .card-tag {
-    background: #e9d5ff;
-    color: #7e22ce;
-  }
-  .card-tit em {
-    background-image: linear-gradient(90deg, #9333ea, #c084fc);
-  }
-  .card-link-btn {
-    background: #9333ea;
-  }
 }
 </style>

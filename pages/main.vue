@@ -21,7 +21,7 @@ export default {
     next()
   },
   mounted() {
-    this.fetchCards()
+    // this.fetchCards()
   },
 
   methods: {
