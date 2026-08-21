@@ -72,6 +72,11 @@ export default {
   methods: {
     handleClickHome() {
       this.$router.push('/main')
+      this.emitClose()
+    },
+    handleClickFortune() {
+      this.$router.push('/fortune')
+      this.emitClose()
     },
     emitClose() {
       this.$emit('close-menu')
@@ -126,6 +131,13 @@ export default {
         </a>
       </div>
     </nav>
+    <div class="lnb-btm" @click="handleClickFortune">
+      <p>
+        <span>AI 영업운세</span>
+        <span>오늘 나의 행운 고객은?</span>
+      </p>
+      <i class="icon-xs icon-angle-right"></i>
+    </div>
     <!-- <div class="lnb-user" v-if="user.name">
       <div class="user-initials">{{ user.name ? user.name[0] : '' }}</div>
       <p class="user-name">{{ user?.name }}</p>
@@ -155,10 +167,35 @@ export default {
     font-weight: 600;
     cursor: pointer;
   }
+  .lnb-btm {
+    margin: 20px 30px 20px 20px;
+    @include flexbox(space-between, center);
+    padding: 20px 0 10px 70px;
+    @include backgrounds('img-honey.png', left bottom);
+    background-size: 74px auto;
+    p {
+      @include columnFlexbox(space-between, flex-start);
+      color: #3f3228;
+      span {
+        &:first-child {
+          font-size: 18px;
+          font-weight: 700;
+        }
+        &:last-child {
+          font-size: 12px;
+          font-weight: 600;
+        }
+      }
+    }
+    i:before {
+      color: #3f3228;
+    }
+  }
   .btn-close {
     display: none;
   }
   nav {
+    overflow-y: auto;
     flex: 1;
     padding: 12px 30px 20px 20px;
     li {

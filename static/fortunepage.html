@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>오늘의 운세</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+        background: linear-gradient(
+          135deg,
+          #1a0533 0%,
+          #2d1b69 50%,
+          #0f172a 100%
+        );
+        min-height: 100vh;
+        color: #fff;
+        padding: 24px 16px 40px;
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 32px;
+      }
+      .header .date {
+        font-size: 13px;
+        color: #a78bfa;
+        margin-bottom: 8px;
+      }
+      .header h1 {
+        font-size: 26px;
+        font-weight: 800;
+        background: linear-gradient(90deg, #f0abfc, #818cf8);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .zodiac-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        max-width: 480px;
+        margin: 0 auto 32px;
+      }
+      .zodiac-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding: 12px 6px;
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #e2d9f3;
+      }
+      .zodiac-btn:hover {
+        background: rgba(167, 139, 250, 0.2);
+        border-color: #a78bfa;
+      }
+      .zodiac-btn.active {
+        background: rgba(167, 139, 250, 0.3);
+        border-color: #c084fc;
+        box-shadow: 0 0 16px rgba(192, 132, 252, 0.3);
+      }
+      .zodiac-btn .emoji {
+        font-size: 22px;
+      }
+      .zodiac-btn .name {
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .zodiac-btn .period {
+        font-size: 9px;
+        color: #a78bfa;
+      }
+
+      .result-card {
+        max-width: 480px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(167, 139, 250, 0.25);
+        border-radius: 20px;
+        padding: 24px;
+        display: none;
+      }
+      .result-card.show {
+        display: block;
+      }
+      .result-card .sign-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .result-card .sign-emoji {
+        font-size: 36px;
+      }
+      .result-card .sign-name {
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .result-card .sign-period {
+        font-size: 12px;
+        color: #a78bfa;
+      }
+
+      .score-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .score-item {
+        flex: 1;
+        text-align: center;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 10px 6px;
+      }
+      .score-item .label {
+        font-size: 11px;
+        color: #a78bfa;
+        margin-bottom: 4px;
+      }
+      .score-item .stars {
+        font-size: 14px;
+        letter-spacing: -2px;
+      }
+
+      .fortune-section {
+        margin-bottom: 16px;
+      }
+      .fortune-section .section-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #c084fc;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+      }
+      .fortune-section p {
+        font-size: 14px;
+        line-height: 1.7;
+        color: #e2d9f3;
+      }
+
+      .lucky-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+      }
+      .lucky-badge {
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .lucky-badge.color {
+        background: rgba(192, 132, 252, 0.2);
+        border: 1px solid #c084fc;
+        color: #f0abfc;
+      }
+      .lucky-badge.number {
+        background: rgba(129, 140, 248, 0.2);
+        border: 1px solid #818cf8;
+        color: #c7d2fe;
+      }
+      .lucky-badge.direction {
+        background: rgba(52, 211, 153, 0.15);
+        border: 1px solid #34d399;
+        color: #6ee7b7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <p class="date" id="today-date"></p>
+      <h1>✨ 오늘의 운세</h1>
+    </div>
+
+    <div class="zodiac-grid" id="zodiac-grid"></div>
+    <div class="result-card" id="result-card"></div>
+
+    <script>
+      const SIGNS = [
+        { emoji: '♈', name: '양자리', period: '3/21~4/19', key: 'aries' },
+        { emoji: '♉', name: '황소자리', period: '4/20~5/20', key: 'taurus' },
+        { emoji: '♊', name: '쌍둥이', period: '5/21~6/21', key: 'gemini' },
+        { emoji: '♋', name: '게자리', period: '6/22~7/22', key: 'cancer' },
+        { emoji: '♌', name: '사자자리', period: '7/23~8/22', key: 'leo' },
+        { emoji: '♍', name: '처녀자리', period: '8/23~9/22', key: 'virgo' },
+        { emoji: '♎', name: '천칭자리', period: '9/23~10/22', key: 'libra' },
+        {
+          emoji: '♏',
+          name: '전갈자리',
+          period: '10/23~11/21',
+          key: 'scorpio',
+        },
+        {
+          emoji: '♐',
+          name: '사수자리',
+          period: '11/22~12/21',
+          key: 'sagittarius',
+        },
+        {
+          emoji: '♑',
+          name: '염소자리',
+          period: '12/22~1/19',
+          key: 'capricorn',
+        },
+        { emoji: '♒', name: '물병자리', period: '1/20~2/18', key: 'aquarius' },
+        { emoji: '♓', name: '물고기', period: '2/19~3/20', key: 'pisces' },
+      ]
+
+      const FORTUNES = {
+        aries: {
+          overall: '★★★★☆',
+          love: '★★★☆☆',
+          money: '★★★★★',
+          work: '★★★☆☆',
+          desc: '오늘은 새로운 도전에 적극적으로 임하는 날입니다. 주변의 도움을 받아들이면 더 큰 성과를 이룰 수 있어요. 오후에는 예상치 못한 좋은 소식이 들려올 것입니다.',
+          lucky_color: '빨간색',
+          lucky_number: '7',
+          lucky_direction: '동쪽',
+        },
+        taurus: {
+          overall: '★★★☆☆',
+          love: '★★★★☆',
+          money: '★★☆☆☆',
+          work: '★★★★☆',
+          desc: '안정적인 하루가 될 것 같습니다. 가까운 사람과의 대화에서 뜻밖의 인사이트를 얻을 수 있습니다. 재정 관련 결정은 신중하게 접근하는 것이 좋습니다.',
+          lucky_color: '초록색',
+          lucky_number: '3',
+          lucky_direction: '남쪽',
+        },
+        gemini: {
+          overall: '★★★★★',
+          love: '★★★★☆',
+          money: '★★★☆☆',
+          work: '★★★★★',
+          desc: '활기찬 에너지가 넘치는 하루입니다. 다양한 사람들과의 소통이 원활하게 이루어지며, 업무에서도 탁월한 성과를 낼 수 있습니다. 오늘은 당신의 매력이 빛나는 날!',
+          lucky_color: '노란색',
+          lucky_number: '11',
+          lucky_direction: '북쪽',
+        },
+        cancer: {
+          overall: '★★★☆☆',
+          love: '★★★★★',
+          money: '★★★☆☆',
+          work: '★★☆☆☆',
+          desc: '감성이 풍부해지는 날입니다. 소중한 사람에게 마음을 전해보세요. 직장에서는 다소 지치는 순간이 있을 수 있으니 충분한 휴식을 챙기는 것이 중요합니다.',
+          lucky_color: '은색',
+          lucky_number: '2',
+          lucky_direction: '서쪽',
+        },
+        leo: {
+          overall: '★★★★☆',
+          love: '★★★☆☆',
+          money: '★★★★☆',
+          work: '★★★★☆',
+          desc: '당신의 리더십이 빛을 발하는 날입니다. 팀을 이끄는 역할에서 탁월한 능력을 발휘할 것입니다. 금전 운도 좋아 작은 투자나 계획을 세워보기에 좋은 날입니다.',
+          lucky_color: '금색',
+          lucky_number: '1',
+          lucky_direction: '동남쪽',
+        },
+        virgo: {
+          overall: '★★★☆☆',
+          love: '★★☆☆☆',
+          money: '★★★★☆',
+          work: '★★★★★',
+          desc: '꼼꼼하고 체계적인 접근이 빛나는 날입니다. 업무에서 디테일한 부분에서 좋은 결과가 나올 것입니다. 건강 관리에도 신경을 쓰면 더욱 활기찬 하루가 될 것입니다.',
+          lucky_color: '갈색',
+          lucky_number: '6',
+          lucky_direction: '서남쪽',
+        },
+        libra: {
+          overall: '★★★★☆',
+          love: '★★★★★',
+          money: '★★★☆☆',
+          work: '★★★☆☆',
+          desc: '조화와 균형을 추구하는 당신에게 좋은 날입니다. 연인이나 파트너와의 관계가 더욱 돈독해질 것입니다. 중요한 결정은 오늘 안에 내리는 것이 유리합니다.',
+          lucky_color: '분홍색',
+          lucky_number: '9',
+          lucky_direction: '북쪽',
+        },
+        scorpio: {
+          overall: '★★★★☆',
+          love: '★★★★☆',
+          money: '★★★★★',
+          work: '★★★☆☆',
+          desc: '직관력이 강해지는 날입니다. 숨겨진 정보를 발견하거나 중요한 진실을 알게 될 수 있습니다. 재정적으로는 예상 밖의 수입이 생길 가능성이 있습니다.',
+          lucky_color: '검정색',
+          lucky_number: '8',
+          lucky_direction: '북동쪽',
+        },
+        sagittarius: {
+          overall: '★★★★★',
+          love: '★★★☆☆',
+          money: '★★★★☆',
+          work: '★★★★☆',
+          desc: '모험심이 넘치는 하루입니다. 새로운 배움이나 여행 계획을 세워보기에 최적의 날입니다. 긍정적인 에너지로 주변 사람들에게 영감을 주는 하루가 될 것입니다.',
+          lucky_color: '보라색',
+          lucky_number: '5',
+          lucky_direction: '동쪽',
+        },
+        capricorn: {
+          overall: '★★★☆☆',
+          love: '★★★☆☆',
+          money: '★★★★☆',
+          work: '★★★★★',
+          desc: '목표를 향해 묵묵히 나아가는 당신에게 보상이 주어지는 날입니다. 장기적인 계획을 점검하고 실행력을 높이는 데 집중하세요. 성실함이 결실을 맺을 것입니다.',
+          lucky_color: '회색',
+          lucky_number: '4',
+          lucky_direction: '남쪽',
+        },
+        aquarius: {
+          overall: '★★★★☆',
+          love: '★★★☆☆',
+          money: '★★★☆☆',
+          work: '★★★★★',
+          desc: '창의적인 아이디어가 샘솟는 날입니다. 혁신적인 접근으로 난제를 해결할 수 있을 것입니다. 새로운 만남이나 네트워크 형성에도 좋은 기운이 흐릅니다.',
+          lucky_color: '파란색',
+          lucky_number: '12',
+          lucky_direction: '서쪽',
+        },
+        pisces: {
+          overall: '★★★☆☆',
+          love: '★★★★★',
+          money: '★★☆☆☆',
+          work: '★★★☆☆',
+          desc: '감수성이 예민해지는 날입니다. 예술적 활동이나 창작 작업에서 영감을 얻을 수 있습니다. 사랑하는 사람에게 솔직한 마음을 표현해보세요. 좋은 반응이 올 것입니다.',
+          lucky_color: '청록색',
+          lucky_number: '7',
+          lucky_direction: '남서쪽',
+        },
+      }
+
+      // 날짜 표시
+      const today = new Date()
+      document.getElementById(
+        'today-date'
+      ).textContent = `${today.getFullYear()}년 ${
+        today.getMonth() + 1
+      }월 ${today.getDate()}일`
+
+      // 그리드 렌더
+      const grid = document.getElementById('zodiac-grid')
+      SIGNS.forEach((sign) => {
+        const btn = document.createElement('button')
+        btn.className = 'zodiac-btn'
+        btn.innerHTML = `<span class="emoji">${sign.emoji}</span><span class="name">${sign.name}</span><span class="period">${sign.period}</span>`
+        btn.addEventListener('click', () => showFortune(sign, btn))
+        grid.appendChild(btn)
+      })
+
+      function showFortune(sign, btn) {
+        document
+          .querySelectorAll('.zodiac-btn')
+          .forEach((b) => b.classList.remove('active'))
+        btn.classList.add('active')
+
+        const f = FORTUNES[sign.key]
+        const card = document.getElementById('result-card')
+        card.innerHTML = `
+        <div class="sign-header">
+          <span class="sign-emoji">${sign.emoji}</span>
+          <div>
+            <div class="sign-name">${sign.name}</div>
+            <div class="sign-period">${sign.period}</div>
+          </div>
+        </div>
+        <div class="score-row">
+          <div class="score-item"><div class="label">종합운</div><div class="stars">${f.overall}</div></div>
+          <div class="score-item"><div class="label">애정운</div><div class="stars">${f.love}</div></div>
+          <div class="score-item"><div class="label">금전운</div><div class="stars">${f.money}</div></div>
+          <div class="score-item"><div class="label">직업운</div><div class="stars">${f.work}</div></div>
+        </div>
+        <div class="fortune-section">
+          <div class="section-title">오늘의 운세</div>
+          <p>${f.desc}</p>
+        </div>
+        <div class="lucky-row">
+          <span class="lucky-badge color">🎨 ${f.lucky_color}</span>
+          <span class="lucky-badge number">🔢 ${f.lucky_number}</span>
+          <span class="lucky-badge direction">🧭 ${f.lucky_direction}</span>
+        </div>
+      `
+        card.classList.add('show')
+
+        // 부모(fortune.vue)에 사용 로그 전송
+        window.parent.postMessage(
+          {
+            type: 'fortune_log',
+            status: 'submit',
+          },
+          '*'
+        )
+      }
+    </script>
+  </body>
+</html>
