@@ -10,6 +10,9 @@ export default {
     audioUrl: process.env.AUDIO_URL,
     pdfUrl: process.env.PDF_URL,
     baseUrl: process.env.BASE_URL,
+    // 보험피터(코칭트랙) 전용 백엔드 주소 - AI Search 백엔드(API_BASE_URL)와는 별개의 서비스
+    API_URL: process.env.COACHING_TRACK_API_URL || '',
+    DEV_API_URL: process.env.COACHING_TRACK_DEV_API_URL || 'http://localhost:8000',
   },
   head: {
     title: 'FC AI Search',

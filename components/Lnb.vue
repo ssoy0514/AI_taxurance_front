@@ -44,6 +44,14 @@ export default {
           active: true,
         },
         {
+          title: '보험피터 코칭트랙',
+          id: 'COACHING_TRACK',
+          path: '/sales/coaching-track',
+          icon: 'icon-magic',
+          items: [],
+          active: true,
+        },
+        {
           title: '숏츠 영상 보기',
           id: 'SHORTS',
           path: '/shorts',
