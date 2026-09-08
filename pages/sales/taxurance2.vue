@@ -5,14 +5,20 @@ import Images from '@/components/Images.vue'
 import Video from '@/components/Video.vue'
 import Link from '@/components/Link.vue'
 import StepDots from '@/components/StepDots.vue'
-import AssetTypeSurvey from '@/components/AssetTypeSurvey.vue'
-import AssetTypeSurveyResult from '@/components/AssetTypeSurveyResult.vue'
-import { getSurveyType, getCoverageContents, getTaxuranceGuide } from '@/utils/mockTaxurance'
+import {
+  getSurveyType,
+  getCoverageContents,
+  getTaxuranceGuide,
+  ageQuestions,
+  mapFilterAgeToSurveyAge,
+  surveyTypeResults,
+  scriptDB,
+} from '@/utils/mockTaxurance'
 
 
 export default {
   name: 'Taxurance2',
-  components: { RightView, Images, Video, Link, StepDots, AssetTypeSurvey, AssetTypeSurveyResult },
+  components: { RightView, Images, Video, Link, StepDots },
 
   data() {
     return {
@@ -31,6 +37,12 @@ export default {
       openConsiderCategories: [],
 
       filters: this.createDefaultFilters(),
+
+      // 자산가유형 설문(이슈 카테고리4) - 문항 이동 상태
+      questionKeys: ['q1', 'q2', 'q3'],
+      currentIndex: 0,
+      // 결과화면 추천 오프닝 화법 - 순환 인덱스
+      scriptIndex: 0,
 
       resultFilters: {},
       messages: [], 
@@ -84,6 +96,37 @@ export default {
     isSidebarOpen() {
       return this.$store.state.isSidebarOpen
     },
+
+    // 자산가유형 설문 - filters.age 기준 문항 세트
+    currentQuestions() {
+      const ageKey = mapFilterAgeToSurveyAge(this.filters.age)
+      return ageKey ? ageQuestions[ageKey] : null
+    },
+    currentKey() {
+      return this.questionKeys[this.currentIndex]
+    },
+    currentQuestion() {
+      return this.currentQuestions ? this.currentQuestions[this.currentKey] : null
+    },
+
+    // 결과화면 - resultFilters(제출 확정본) 기준 진단 결과/추천 화법
+    resultMeta() {
+      return this.resultFilters.opening_survey ? surveyTypeResults[this.resultFilters.opening_survey] : null
+    },
+    currentScriptList() {
+      const ageKey = mapFilterAgeToSurveyAge(this.resultFilters.age)
+      return this.resultFilters.opening_survey && ageKey
+        ? scriptDB[this.resultFilters.opening_survey][ageKey] || []
+        : []
+    },
+    currentScript() {
+      if (this.currentScriptList.length === 0) return ''
+      return this.currentScriptList[this.scriptIndex % this.currentScriptList.length]
+    },
+    scriptCountLabel() {
+      if (this.currentScriptList.length === 0) return '0/0'
+      return `${(this.scriptIndex % this.currentScriptList.length) + 1}/${this.currentScriptList.length}`
+    },
   },
 
   watch: {
@@ -102,6 +145,11 @@ export default {
 
     msgCount() {
       this.$nextTick(() => this.scrollToBottom(true))
+    },
+
+    'filters.age'() {
+      this.currentIndex = 0
+      this.filters.opening_survey = { q1: '', q2: '', q3: '' }
     },
   },
 
@@ -211,6 +259,22 @@ export default {
 
     isConsiderOpen(label) {
       return this.openConsiderCategories.includes(label)
+    },
+
+    // 자산가유형 설문 - 이미 선택된 항목을 다시 클릭하면 선택 해제됨
+    toggleAnswer(qKey, val) {
+      this.filters.opening_survey[qKey] = this.filters.opening_survey[qKey] === val ? '' : val
+    },
+    goNext() {
+      if (this.currentIndex < this.questionKeys.length - 1) this.currentIndex += 1
+    },
+    goPrev() {
+      if (this.currentIndex > 0) this.currentIndex -= 1
+    },
+
+    // 결과화면 추천 오프닝 화법 - 다음 문구로 순환
+    refreshScript() {
+      this.scriptIndex += 1
     },
     toggleConsiderOpen(category) {
       const label = category.label
@@ -331,6 +395,8 @@ export default {
       this.text = ''
       this.currentStep = 0
       this.isTyping = false
+      this.currentIndex = 0
+      this.scriptIndex = 0
 
       this.handleChangeView('list')
     },
@@ -364,6 +430,38 @@ export default {
     },
   },
 }
+
+// [백엔드 api 연동 시 수정]
+// async fetchContents() {
+//   try {
+//     const { items, succ } = await this.$axios.post('/coverage/contents', {
+//       interest: this.filters.interest,
+//       considerations: this.filters.considerations,
+//     })
+//     if (succ) {
+//       this.toggleRelatedDataMapping(true, items)
+//       this.relatedData = items
+//     }
+//   } catch (e) {
+//     console.warn('[fetchContents] 관련자료 조회 실패:', e)
+//   }
+// },
+
+// [백엔드 api 연동 시 수정]
+// await this.$stream.fetchStream('/taxurance/guide/make', params, {
+//   onChunk: (chunk) => {
+//     const last = this.messages[this.messages.length - 1]
+//     this.$set(last, 'content', (last.content || '') + chunk)
+//     this.$nextTick(() => this.scrollToBottom(false))
+//   },
+//   onFinished: () => {
+//     const last = this.messages[this.messages.length - 1]
+//     this.$set(last, 'readyTrans', true)
+//     this.$nextTick(() => this.scrollToBottom(false))
+//     this.isTyping = false
+//     this.clearTicker()
+//   },
+// })
 </script>
 
 <template>
@@ -441,11 +539,46 @@ export default {
                       <span class="consider-toggle-label">{{ category.label }}</span>
                     </div>
                     <div v-show="isConsiderOpen(category.label)" class="consider-accordion-body">
-                      <AssetTypeSurvey
-                        v-if="category.type === 'survey'"
-                        v-model="filters.opening_survey"
-                        :age="filters.age"
-                      />
+                      <div v-if="category.type === 'survey'" class="asset-survey">
+                        <p class="asset-survey-desc">
+                          아래 질문을 고객에게 건네고, 고객의 답변과 가장 가까운 항목을 체크하세요.
+                        </p>
+                        <template v-if="currentQuestions">
+                          <p class="asset-survey-step">질문 {{ currentIndex + 1 }} / {{ questionKeys.length }}</p>
+                          <div class="asset-survey-block">
+                            <p class="asset-survey-block-tit">{{ currentQuestion.title }}</p>
+                            <div class="asset-survey-option-list">
+                              <label
+                                v-for="opt in currentQuestion.options"
+                                :key="opt.val"
+                                class="asset-survey-pill"
+                                :class="{ active: filters.opening_survey[currentKey] === opt.val }"
+                                @click="toggleAnswer(currentKey, opt.val)"
+                              >
+                                <span>{{ opt.text }}</span>
+                              </label>
+                            </div>
+                            <div class="asset-survey-nav">
+                              <button
+                                v-if="currentIndex > 0"
+                                type="button"
+                                class="asset-survey-btn-prev"
+                                @click="goPrev"
+                              >
+                                이전
+                              </button>
+                              <button
+                                v-if="filters.opening_survey[currentKey] && currentIndex < questionKeys.length - 1"
+                                type="button"
+                                class="asset-survey-btn-next"
+                                @click="goNext"
+                              >
+                                다음
+                              </button>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
                       <div v-else class="consider-item-row">
                         <label v-for="item in category.items" :key="item">
                           <input type="checkbox" :value="item" v-model="filters.considerations" />
@@ -540,11 +673,23 @@ export default {
                 </ul>
               </div>
 
-              <AssetTypeSurveyResult
-                v-if="hasResult"
-                :type="resultFilters.opening_survey"
-                :age="resultFilters.age"
-              />
+              <div class="asset-survey-result" v-if="hasResult && resultMeta">
+                <span class="asset-survey-badge">{{ resultMeta.badge }} · {{ resultMeta.typeTitle }}</span>
+                <p class="asset-survey-result-desc">{{ resultMeta.typeDesc }}</p>
+                <ul class="asset-survey-points">
+                  <li v-for="(point, idx) in resultMeta.points" :key="idx">{{ point }}</li>
+                </ul>
+
+                <div class="asset-survey-script">
+                  <div class="asset-survey-script-header">
+                    <span class="asset-survey-script-label">💡 추천 오프닝 화법</span>
+                    <button type="button" class="asset-survey-script-refresh" @click="refreshScript">
+                      🔄 다른 멘트 보기 ({{ scriptCountLabel }})
+                    </button>
+                  </div>
+                  <p class="asset-survey-script-body">{{ currentScript }}</p>
+                </div>
+              </div>
 
               <!-- 실제 대화 메시지 목록 (messages 배열을 순회) -->
               <div
@@ -949,5 +1094,177 @@ export default {
 }
 
 @media (hover: hover) {
+}
+
+/* 자산가유형 설문 (이슈 카테고리4) */
+.asset-survey {
+  display: flex;
+  flex-direction: column;
+  gap: rem(16);
+}
+.asset-survey-desc {
+  font-size: 12.5px;
+  color: #62748e;
+  line-height: 1.5;
+}
+.asset-survey-step {
+  font-size: 12px;
+  font-weight: 600;
+  color: #90a1b9;
+}
+.asset-survey-block {
+  display: flex;
+  flex-direction: column;
+  gap: rem(8);
+}
+.asset-survey-block-tit {
+  font-size: 13px;
+  font-weight: 600;
+  color: #314158;
+  line-height: 1.5;
+  word-break: keep-all;
+}
+.asset-survey-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.asset-survey-pill {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background-color: #fff;
+  color: #62748e;
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+
+  &:hover {
+    border-color: #b7ccff;
+    background-color: #f5f8ff;
+  }
+
+  &.active {
+    border-color: #545fdd;
+    background-color: #eef1ff;
+    color: #37409e;
+    font-weight: 500;
+  }
+}
+.asset-survey-nav {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.asset-survey-btn-prev,
+.asset-survey-btn-next {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.asset-survey-btn-prev {
+  background-color: #f1f5f9;
+  color: #62748e;
+}
+.asset-survey-btn-next {
+  background-color: #545fdd;
+  color: #fff;
+}
+
+/* 자산가유형 설문 결과 (결과화면) */
+.asset-survey-result {
+  padding: rem(16);
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  background-color: #f0fdf4;
+}
+.asset-survey-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background-color: #15803d;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.asset-survey-result-desc {
+  font-size: 13px;
+  color: #166534;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+.asset-survey-points {
+  list-style: none;
+  padding-top: 10px;
+  border-top: 1px dashed #86efac;
+  margin-bottom: 16px;
+
+  li {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 12.5px;
+    color: #15803d;
+    margin-bottom: 6px;
+    line-height: 1.5;
+
+    &::before {
+      content: '✔';
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+  }
+}
+.asset-survey-script {
+  padding: rem(14);
+  border: 1px solid #86efac;
+  border-radius: 10px;
+  background-color: #fff;
+}
+.asset-survey-script-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.asset-survey-script-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #545fdd;
+}
+.asset-survey-script-refresh {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background-color: #f1f5f9;
+  color: #334155;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background-color: #e2e8f0;
+  }
+}
+.asset-survey-script-body {
+  padding: 12px 14px;
+  border-left: 4px solid #2563eb;
+  border-radius: 8px;
+  background-color: #f8fafc;
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.7;
+  word-break: keep-all;
 }
 </style>
