@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AI서치 프론트엔드</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#faf9f7;
+    --surface:#ffffff;
+    --surface-alt:#f1f2f7;
+    --ink:#14171f;
+    --ink-soft:#4b5164;
+    --ink-faint:#8890a0;
+    --accent:#3548d4;
+    --accent-ink:#ffffff;
+    --accent-soft:#ecefff;
+    --line:#e3e5ee;
+    --line-strong:#c9cddb;
+    --success:#1f8f6b;
+    --success-soft:#e6f6ef;
+    --warning:#a8690a;
+    --warning-soft:#fbf1dc;
+    --danger:#c8433f;
+    --danger-soft:#fbeae9;
+    --code-bg:#161a23;
+    --code-bar:#1e2330;
+    --code-ink:#d8dce8;
+    --code-accent:#8fb4ff;
+    --shadow:0 1px 2px rgba(20,24,31,.05), 0 10px 28px rgba(20,24,31,.07);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0d0f14;
+      --surface:#151822;
+      --surface-alt:#1b1f2b;
+      --ink:#e9ebf2;
+      --ink-soft:#aab0c2;
+      --ink-faint:#6d7488;
+      --accent:#8fa0ff;
+      --accent-ink:#0d0f14;
+      --accent-soft:#212a52;
+      --line:#262b3a;
+      --line-strong:#333a4d;
+      --success:#57cda6;
+      --success-soft:#16332a;
+      --warning:#e2ac54;
+      --warning-soft:#372b14;
+      --danger:#ec7571;
+      --danger-soft:#3a1f1e;
+      --code-bg:#0a0c11;
+      --code-bar:#12151d;
+      --code-ink:#ccd2e3;
+      --code-accent:#8fb4ff;
+      --shadow:0 1px 2px rgba(0,0,0,.35), 0 10px 28px rgba(0,0,0,.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d0f14;
+    --surface:#151822;
+    --surface-alt:#1b1f2b;
+    --ink:#e9ebf2;
+    --ink-soft:#aab0c2;
+    --ink-faint:#6d7488;
+    --accent:#8fa0ff;
+    --accent-ink:#0d0f14;
+    --accent-soft:#212a52;
+    --line:#262b3a;
+    --line-strong:#333a4d;
+    --success:#57cda6;
+    --success-soft:#16332a;
+    --warning:#e2ac54;
+    --warning-soft:#372b14;
+    --danger:#ec7571;
+    --danger-soft:#3a1f1e;
+    --code-bg:#0a0c11;
+    --code-bar:#12151d;
+    --code-ink:#ccd2e3;
+    --code-accent:#8fb4ff;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 10px 28px rgba(0,0,0,.45);
+  }
+
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'IBM Plex Sans KR', 'Apple SD Gothic Neo', sans-serif;
+    font-size:16px;
+    line-height:1.75;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--accent-soft); color:var(--ink); }
+
+  h1,h2,h3,h4{
+    font-family:'Gowun Batang', 'Noto Serif KR', serif;
+    font-weight:700;
+    color:var(--ink);
+    text-wrap:balance;
+    line-height:1.35;
+  }
+  a{ color:var(--accent); }
+  code, .mono{ font-family:'IBM Plex Mono', ui-monospace, monospace; }
+
+  /* ---------- layout shell ---------- */
+  .shell{
+    display:grid;
+    grid-template-columns:264px minmax(0,1fr);
+    max-width:1240px;
+    margin:0 auto;
+  }
+  .toc{
+    position:sticky;
+    top:0;
+    align-self:start;
+    height:100vh;
+    overflow-y:auto;
+    padding:40px 20px 40px 32px;
+    border-right:1px solid var(--line);
+  }
+  .toc-kicker{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    margin:0 0 14px;
+  }
+  .toc nav a{
+    display:block;
+    padding:6px 10px;
+    margin:1px 0;
+    border-radius:8px;
+    color:var(--ink-soft);
+    text-decoration:none;
+    font-size:13.5px;
+    line-height:1.4;
+    transition:background .15s, color .15s;
+  }
+  .toc nav a:hover{ background:var(--surface-alt); color:var(--ink); }
+  .toc nav a.sub{ padding-left:22px; font-size:12.5px; }
+  .toc-group{ margin-top:16px; }
+
+  main{ min-width:0; padding:56px 48px 120px; }
+
+  /* ---------- hero ---------- */
+  .hero{ margin-bottom:56px; }
+  .hero .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:0 0 12px;
+  }
+  .hero h1{ font-size:clamp(32px,4vw,44px); margin:0 0 18px; }
+  .hero p{ color:var(--ink-soft); font-size:17px; max-width:62ch; margin:0 0 10px; }
+  .hero .meta{
+    display:flex; gap:10px; flex-wrap:wrap; margin-top:22px;
+  }
+  .chip{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:5px 12px; border-radius:999px;
+    background:var(--surface-alt); border:1px solid var(--line);
+    font-size:12.5px; color:var(--ink-soft);
+  }
+
+  /* ---------- sections ---------- */
+  section{ margin-bottom:76px; scroll-margin-top:24px; }
+  section > .section-head{ margin-bottom:22px; }
+  .section-num{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; color:var(--accent);
+    letter-spacing:.08em;
+  }
+  section h2{ font-size:28px; margin:6px 0 0; }
+  section h3{ font-size:19px; margin:36px 0 12px; }
+  section > p, .prose p{ color:var(--ink-soft); max-width:70ch; }
+  .lede{ font-size:17px; color:var(--ink-soft); max-width:68ch; }
+
+  .callout{
+    display:flex; gap:14px;
+    padding:18px 20px;
+    border-radius:14px;
+    background:var(--accent-soft);
+    border:1px solid color-mix(in srgb, var(--accent) 25%, var(--line));
+    margin:20px 0;
+  }
+  .callout .icon{ font-size:20px; line-height:1.4; }
+  .callout p{ margin:0; color:var(--ink); font-size:14.5px; }
+  .callout strong{ font-family:'IBM Plex Sans KR'; }
+
+  /* ---------- analogy box ---------- */
+  .analogy{
+    border:1px dashed var(--line-strong);
+    border-radius:16px;
+    padding:20px 22px;
+    background:var(--surface);
+    margin:22px 0;
+  }
+  .analogy .label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-faint); margin-bottom:8px;
+  }
+  .analogy p{ margin:6px 0; font-size:14.5px; color:var(--ink-soft); }
+
+  /* ---------- code / snippet ---------- */
+  .snippet{
+    border-radius:14px;
+    overflow:hidden;
+    box-shadow:var(--shadow);
+    margin:18px 0;
+    background:var(--code-bg);
+  }
+  .snippet .bar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:9px 16px;
+    background:var(--code-bar);
+    border-bottom:1px solid rgba(255,255,255,.06);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; color:var(--code-accent);
+  }
+  .snippet pre{
+    margin:0; padding:16px 18px;
+    overflow-x:auto;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px; line-height:1.7;
+    color:var(--code-ink);
+  }
+  .snippet .dots{ display:flex; gap:5px; }
+  .snippet .dots span{ width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.18); }
+
+  /* ---------- tables ---------- */
+  .table-wrap{ overflow-x:auto; border-radius:14px; border:1px solid var(--line); margin:18px 0; }
+  table{ border-collapse:collapse; width:100%; min-width:560px; font-size:14px; }
+  thead th{
+    text-align:left; font-family:'IBM Plex Sans KR'; font-weight:600;
+    background:var(--surface-alt); color:var(--ink-soft);
+    padding:11px 16px; font-size:12.5px; letter-spacing:.02em;
+    border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  tbody td{
+    padding:12px 16px; border-bottom:1px solid var(--line);
+    color:var(--ink-soft); vertical-align:top;
+  }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody td:first-child{ color:var(--ink); font-weight:600; font-family:'IBM Plex Mono', monospace; font-size:12.5px; white-space:nowrap; }
+  tbody tr:hover{ background:var(--surface-alt); }
+
+  /* ---------- folder tree ---------- */
+  .tree{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px 24px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    line-height:1.95;
+    color:var(--ink-soft);
+    overflow-x:auto;
+    margin:18px 0;
+  }
+  .tree .dir{ color:var(--accent); font-weight:600; }
+  .tree .note{ color:var(--ink-faint); }
+
+  /* ---------- mermaid ---------- */
+  .diagram{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:22px;
+    margin:20px 0;
+    overflow-x:auto;
+  }
+  .diagram figcaption{
+    font-size:12.5px; color:var(--ink-faint); margin-top:10px; text-align:center;
+  }
+
+  /* ---------- glossary ---------- */
+  .glossary{
+    display:grid; grid-template-columns:repeat(2,1fr); gap:14px;
+  }
+  @media (max-width:720px){ .glossary{ grid-template-columns:1fr; } }
+  .gterm{
+    padding:16px 18px; border-radius:14px;
+    background:var(--surface); border:1px solid var(--line);
+  }
+  .gterm dt{
+    font-family:'IBM Plex Mono', monospace; font-weight:600; color:var(--accent);
+    font-size:13.5px; margin-bottom:6px;
+  }
+  .gterm dd{ margin:0; font-size:13.5px; color:var(--ink-soft); }
+
+  /* ---------- findings ---------- */
+  .finding{
+    display:grid; grid-template-columns:110px 1fr; gap:18px;
+    padding:18px 20px; border-radius:14px;
+    background:var(--surface); border:1px solid var(--line);
+    margin-bottom:14px;
+  }
+  @media (max-width:640px){ .finding{ grid-template-columns:1fr; } }
+  .sev{
+    display:inline-flex; align-items:center; justify-content:center;
+    height:24px; padding:0 10px; border-radius:999px;
+    font-size:11.5px; font-weight:600; letter-spacing:.03em;
+    align-self:start;
+  }
+  .sev.warn{ background:var(--warning-soft); color:var(--warning); }
+  .sev.bug{ background:var(--danger-soft); color:var(--danger); }
+  .sev.note{ background:var(--success-soft); color:var(--success); }
+  .finding h4{ margin:0 0 6px; font-size:15px; font-family:'IBM Plex Sans KR'; font-weight:700; }
+  .finding p{ margin:4px 0 0; font-size:13.5px; color:var(--ink-soft); }
+  .finding .loc{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink-faint); }
+
+  /* ---------- page cards ---------- */
+  .pagecard{
+    border:1px solid var(--line); border-radius:16px; padding:22px 24px;
+    background:var(--surface); margin-bottom:18px;
+  }
+  .pagecard .route{
+    display:inline-block; font-family:'IBM Plex Mono', monospace;
+    font-size:12px; color:var(--accent); background:var(--accent-soft);
+    padding:3px 10px; border-radius:8px; margin-bottom:10px;
+  }
+  .pagecard h4{ margin:0 0 8px; font-size:17px; font-family:'IBM Plex Sans KR'; font-weight:700; }
+  .pagecard p{ margin:6px 0; font-size:14px; color:var(--ink-soft); }
+  .pagecard .tag{
+    display:inline-block; font-size:11.5px; color:var(--ink-faint);
+    border:1px solid var(--line); padding:2px 8px; border-radius:6px; margin:8px 6px 0 0;
+  }
+
+  hr.div{ border:none; border-top:1px solid var(--line); margin:56px 0; }
+
+  footer{
+    padding:40px 48px 80px; color:var(--ink-faint); font-size:13px;
+    border-top:1px solid var(--line);
+  }
+
+  @media (max-width:900px){
+    .shell{ grid-template-columns:1fr; }
+    .toc{ position:static; height:auto; border-right:none; border-bottom:1px solid var(--line); padding:28px 24px; }
+    main{ padding:40px 24px 100px; }
+  }
+
+  .mermaid{ display:flex; justify-content:center; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="toc">
+    <p class="toc-kicker">목차</p>
+    <nav>
+      <a href="#overview">1. 이 문서 사용법</a>
+      <a href="#bigpicture">2. 큰 그림 한눈에</a>
+      <a href="#stack">3. 기술 스택</a>
+      <a href="#structure">4. 폴더 구조</a>
+      <a href="#flow">5. 요청이 처리되는 흐름</a>
+      <a href="#routing">6. pc/mo 자동 분기</a>
+      <a href="#store">7. 상태 관리 (Vuex)</a>
+      <a href="#layout">8. 공통 레이아웃</a>
+      <a href="#pages">9. 페이지별 상세</a>
+      <a href="#components">10. 컴포넌트 라이브러리</a>
+      <a href="#streaming">11. 실시간 스트리밍 채팅</a>
+      <a href="#errors">12. 에러 &amp; 세션 처리</a>
+      <a href="#styles">13. 스타일 시스템</a>
+      <a href="#deploy">14. 빌드 &amp; 배포</a>
+      <a href="#review">15. 코드 리뷰 — 발견된 이슈</a>
+      <a href="#glossary">16. 용어 사전</a>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="hero">
+      <p class="eyebrow">Code Walkthrough · asp-fc-search-front</p>
+      <h1>AI서치 프론트엔드, 처음부터 끝까지</h1>
+      <p>이 문서는 삼성생명 FC(설계사)용 영업지원 웹앱 <strong>&ldquo;AI Search&rdquo;</strong>의 프론트엔드 코드 전체를 훑어보는 안내서입니다. 개발 경험이 없어도 이 프로젝트가 어떻게 동작하는지, 어떤 파일이 무슨 역할을 하는지 이해할 수 있도록 최대한 쉬운 말로 풀어 썼습니다.</p>
+      <div class="meta">
+        <span class="chip">Nuxt.js 2.15 · Vue 2.7</span>
+        <span class="chip">Vuex 상태관리</span>
+        <span class="chip">파일 9개 · 컴포넌트 25개</span>
+        <span class="chip">2026-08-28 기준</span>
+      </div>
+    </div>
+
+    <!-- 1. 사용법 -->
+    <section id="overview">
+      <div class="section-head">
+        <p class="section-num">01 / 16</p>
+        <h2>이 문서 사용법</h2>
+      </div>
+      <p class="lede">왼쪽 목차를 눌러 원하는 부분으로 바로 이동할 수 있습니다. 처음 보시는 분은 2~5번(큰 그림 → 흐름)을 먼저 읽으면 전체 그림이 잡히고, 이후는 필요한 부분만 골라 보셔도 됩니다. 16번 용어 사전은 낯선 단어가 나올 때마다 참고하세요.</p>
+      <div class="callout">
+        <span class="icon">💡</span>
+        <p><strong>읽는 순서 추천</strong> — 큰 그림 → 요청 흐름 → 페이지별 상세 순으로 읽으면, &ldquo;화면에 뭐가 보이는지&rdquo;에서 &ldquo;그게 코드로 어떻게 만들어지는지&rdquo;까지 자연스럽게 연결됩니다.</p>
+      </div>
+    </section>
+
+    <!-- 2. 큰 그림 -->
+    <section id="bigpicture">
+      <div class="section-head">
+        <p class="section-num">02 / 16</p>
+        <h2>큰 그림 한눈에 보기</h2>
+      </div>
+      <p class="lede">이 프로젝트는 삼성생명 FC(보험설계사)가 상품 정보, 보장설계 화법, 약관, 언더라이팅 기준 등을 AI의 도움을 받아 빠르게 찾아보고, 숏츠·팟캐스트 형태의 교육 콘텐츠도 함께 볼 수 있는 &ldquo;영업 지원 포털&rdquo;입니다.</p>
+
+      <div class="analogy">
+        <p class="label">비유로 이해하기</p>
+        <p><strong>프론트엔드(이 저장소)</strong>는 손님을 맞는 &ldquo;홀&rdquo;입니다. 메뉴판을 보여주고, 주문을 받고, 음식이 나오면 예쁘게 세팅해서 손님에게 가져다주는 역할을 하죠.</p>
+        <p><strong>백엔드(사내 API 서버)</strong>는 실제로 요리를 하는 &ldquo;주방&rdquo;입니다. 상품 데이터를 찾고, AI에게 질문을 던지고, 결과를 만들어 홀로 넘겨줍니다.</p>
+        <p>이 저장소는 <em>홀</em>의 코드만 담고 있습니다. 즉, 화면에 무엇을 어떻게 보여줄지를 다루고, 실제 데이터를 만들어내는 &ldquo;요리&rdquo; 자체는 다른 서버(주방)가 담당합니다.</p>
+      </div>
+
+      <h3>이 앱이 제공하는 6가지 핵심 기능</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>기능</th><th>메뉴 위치</th><th>한 줄 설명</th></tr></thead>
+          <tbody>
+            <tr><td>상품나침반</td><td>/sales/product-info</td><td>상품을 고르면 AI가 채팅으로 상세 설명·상담 멘트를 생성</td></tr>
+            <tr><td>보장설계 바이블</td><td>/sales/design-bible</td><td>고객 조건(성별·나이·관심보장)을 넣으면 AI가 맞춤 화법을 생성</td></tr>
+            <tr><td>간편 언더라이팅</td><td>/sales/under</td><td>질병명을 검색하면 보장 가능 여부·인수 기준을 확인</td></tr>
+            <tr><td>약관조회</td><td>/sales/terms</td><td>상품·기간·특약별 약관 원문을 검색하고 AI 요약을 확인</td></tr>
+            <tr><td>숏츠 영상</td><td>/shorts, /play</td><td>영업 교육용 짧은 영상 콘텐츠 재생</td></tr>
+            <tr><td>팟캐스트</td><td>/podcast, /play</td><td>이동 중에 들을 수 있는 오디오 콘텐츠 재생</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 3. 기술 스택 -->
+    <section id="stack">
+      <div class="section-head">
+        <p class="section-num">03 / 16</p>
+        <h2>기술 스택 한눈에</h2>
+      </div>
+      <p class="lede">이 프로젝트를 만드는 데 쓰인 주요 도구들입니다. 각 도구가 정확히 무엇인지 몰라도, &ldquo;이 도구가 이런 문제를 해결하려고 쓰였구나&rdquo; 정도로 이해하시면 충분합니다.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>도구</th><th>버전</th><th>쉬운 설명</th></tr></thead>
+          <tbody>
+            <tr><td>Vue 2</td><td>2.7.16</td><td>화면의 부품(버튼, 카드, 목록 등)을 만드는 기본 도구. HTML+데이터+동작을 한 파일(.vue)에 묶어서 관리합니다.</td></tr>
+            <tr><td>Nuxt 2</td><td>2.15.7</td><td>Vue로 &ldquo;웹사이트 한 채&rdquo;를 지을 때 필요한 라우팅·서버·빌드 설정을 미리 갖춰주는 프레임워크. <code>pages</code> 폴더에 파일만 만들면 자동으로 그 이름의 페이지(URL)가 생깁니다.</td></tr>
+            <tr><td>Vuex</td><td>3.6.2</td><td>여러 화면이 공통으로 봐야 하는 정보(로그인한 사용자, 로딩 상태 등)를 한 곳에 모아두는 &ldquo;공용 칠판&rdquo;입니다.</td></tr>
+            <tr><td>axios</td><td>1.15.0</td><td>브라우저가 서버에 데이터를 요청하고 받아오는 통신 도구.</td></tr>
+            <tr><td>TypeScript</td><td>4.5.5</td><td>일부 파일(<code>.ts</code>)에서 데이터의 &ldquo;타입&rdquo;(숫자인지 글자인지 등)을 미리 정해 실수를 줄여주는 언어. 전체가 아니라 store·utils·plugins 일부에만 적용돼 있습니다.</td></tr>
+            <tr><td>SCSS</td><td>1.69.5</td><td>CSS(디자인 언어)를 변수·함수·중첩 문법으로 더 편하게 쓸 수 있게 확장한 언어.</td></tr>
+            <tr><td>PM2</td><td>6.0.10</td><td>운영 서버에서 이 앱이 죽지 않고 계속 돌아가도록 관리해주는 프로세스 매니저.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4. 폴더 구조 -->
+    <section id="structure">
+      <div class="section-head">
+        <p class="section-num">04 / 16</p>
+        <h2>폴더 구조 — 무엇이 어디에 있나</h2>
+      </div>
+      <p class="lede">Nuxt는 폴더 이름 자체에 규칙과 의미를 부여합니다. 폴더 이름만 알아도 그 안의 파일이 대략 무슨 역할인지 짐작할 수 있습니다.</p>
+      <div class="tree">
+<span class="dir">pages/</span>              <span class="note">→ 화면(페이지) 정의. 파일 하나 = URL 하나</span>
+├─ main.vue         <span class="note">메인 홈 (심플 버전)</span>
+├─ mainNew.vue       <span class="note">메인 홈 (카드형 신버전, 목데이터 사용)</span>
+├─ play.vue          <span class="note">영상/오디오 재생 페이지</span>
+├─ podcast.vue       <span class="note">팟캐스트 목록</span>
+├─ shorts.vue        <span class="note">숏츠 영상 목록</span>
+├─ error.vue         <span class="note">에러 화면 진입점</span>
+└─ <span class="dir">sales/</span>
+   ├─ product-info.vue   <span class="note">상품나침반</span>
+   ├─ design-bible.vue   <span class="note">보장설계 바이블</span>
+   ├─ terms.vue          <span class="note">약관조회</span>
+   └─ under.vue          <span class="note">간편 언더라이팅</span>
+
+<span class="dir">components/</span>         <span class="note">→ 여러 페이지가 재사용하는 부품 (25개)</span>
+<span class="dir">layouts/</span>            <span class="note">→ 페이지들을 감싸는 공통 뼈대</span>
+<span class="dir">store/</span>              <span class="note">→ 앱 전체가 공유하는 데이터 (Vuex)</span>
+<span class="dir">plugins/</span>            <span class="note">→ 앱이 켜질 때 한 번 실행되는 초기화 코드</span>
+<span class="dir">middleware/</span>         <span class="note">→ 페이지 진입 전 실행되는 &ldquo;검문소&rdquo;</span>
+<span class="dir">server-middleware/</span>  <span class="note">→ 서버(Node) 쪽에서만 도는 코드</span>
+<span class="dir">utils/</span>              <span class="note">→ 여러 곳에서 쓰는 순수 함수 모음</span>
+<span class="dir">assets/styles/</span>      <span class="note">→ 전역 디자인 규칙 (SCSS)</span>
+<span class="dir">static/</span>             <span class="note">→ 가공 없이 그대로 배포되는 파일</span>
+nuxt.config.js       <span class="note">→ 이 프로젝트 전체 설정의 시작점</span>
+package.json         <span class="note">→ 실행/빌드 명령어 &amp; 라이브러리 목록</span>
+      </div>
+      <div class="callout">
+        <span class="icon">🗂️</span>
+        <p><strong>핵심 규칙 한 가지</strong> — <code>pages</code> 폴더에 <code>.vue</code> 파일을 하나 추가하면, 별도 설정 없이 그 파일명이 곧 URL이 됩니다. 예: <code>pages/sales/terms.vue</code> → <code>/sales/terms</code>. 이걸 &ldquo;파일 기반 라우팅&rdquo;이라고 부릅니다.</p>
+      </div>
+    </section>
+
+    <!-- 5. 요청 흐름 -->
+    <section id="flow">
+      <div class="section-head">
+        <p class="section-num">05 / 16</p>
+        <h2>요청이 처리되는 흐름</h2>
+      </div>
+      <p class="lede">사용자가 링크를 하나 클릭했을 때, 화면에 데이터가 뜨기까지 내부적으로 어떤 순서로 일이 벌어지는지 살펴봅니다.</p>
+      <figure class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+  participant U as 사용자(브라우저)
+  participant R as 라우터<br/>router-prefix.js
+  participant P as 페이지 컴포넌트<br/>pages/*.vue
+  participant A as axios 플러그인<br/>plugins/axios.ts
+  participant N as Nuxt 서버<br/>(proxy 설정)
+  participant B as 사내 API 서버
+
+  U->>R: /main 접속
+  R->>R: 쿠키에서 pc/mo 채널 확인 후 접두어 자동 부착
+  R->>P: /pc/main 페이지 렌더링 시작
+  P->>A: this.$axios.get('/contents/card')
+  A->>N: /api/v1/contents/card 요청 (프록시)
+  N->>B: API_BASE_URL로 그대로 전달
+  B-->>N: JSON 응답
+  N-->>A: 응답 전달
+  A-->>P: 공통 응답 처리 후 데이터 반환
+  P-->>U: 카드 목록을 화면에 렌더링
+        </pre>
+        <figcaption>main.vue가 화면에 카드 목록을 띄우기까지의 전체 경로</figcaption>
+      </figure>
+      <p>여기서 중요한 지점 두 곳을 짚어보겠습니다.</p>
+      <h3>① nuxt.config.js의 proxy 설정</h3>
+      <p>브라우저는 보안 정책(CORS) 때문에 다른 주소의 서버로 직접 요청을 보내기 까다롭습니다. 그래서 이 프로젝트는 브라우저가 같은 주소(<code>localhost:5200</code>)로 요청을 보내면, Nuxt 서버가 그 요청을 실제 API 서버(<code>API_BASE_URL</code>)로 대신 전달해주는 &ldquo;중계소&rdquo; 역할을 합니다.</p>
+      <div class="snippet">
+        <div class="bar"><span>nuxt.config.js</span><span class="dots"><span></span><span></span><span></span></span></div>
+        <pre>proxy: {
+  '/api/v1': {
+    target: process.env.API_BASE_URL,
+    pathRewrite: { '^/api/v1': '' },
+    changeOrigin: true,
+  },
+}</pre>
+      </div>
+      <h3>② plugins/axios.ts의 공통 인터셉터</h3>
+      <p>모든 API 요청과 응답은 <code>plugins/axios.ts</code>를 반드시 거칩니다. 여기서 하는 일은 세 가지입니다.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>단계</th><th>하는 일</th></tr></thead>
+          <tbody>
+            <tr><td>요청 전</td><td>쿠키 인증을 위해 <code>withCredentials</code>를 켜고, 현재 채널(pc/mo)을 헤더에 실어 보냅니다.</td></tr>
+            <tr><td>응답 후</td><td>서버가 내려준 <code>result_cd</code> 값을 검사해 세션 만료(EP), 권한없음(NA/BE), 서버오류(SE) 등을 공통으로 처리합니다.</td></tr>
+            <tr><td>에러 발생 시</td><td>404는 에러 페이지로, 422/500은 세션 만료 처리로 자동 연결합니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">
+        <span class="icon">✅</span>
+        <p><strong>비개발자 관점 요약</strong> — 화면마다 &ldquo;서버 응답 확인하고 에러면 알림 띄우고…&rdquo;를 매번 따로 짜지 않아도 되도록, 이 앱은 그 처리를 <code>axios.ts</code> 한 곳에 몰아두었습니다. 덕분에 페이지 코드는 &ldquo;데이터 요청 → 화면에 뿌리기&rdquo;에만 집중할 수 있습니다.</p>
+      </div>
+    </section>
+
+    <!-- 6. 라우팅 -->
+    <section id="routing">
+      <div class="section-head">
+        <p class="section-num">06 / 16</p>
+        <h2>PC/모바일 자동 분기 — 이 프로젝트의 가장 독특한 부분</h2>
+      </div>
+      <p class="lede">같은 화면이라도 PC와 모바일에서 레이아웃이 크게 다를 수 있습니다. 이 프로젝트는 &ldquo;완전히 다른 두 벌의 화면&rdquo;을 만들지 않고, 모든 페이지에 <code>/pc</code> 또는 <code>/mo</code> 접두어를 자동으로 붙여 같은 컴포넌트를 재사용하는 방식을 씁니다.</p>
+      <figure class="diagram">
+        <pre class="mermaid">
+flowchart LR
+  A["사용자가 URL 접속<br/>예: /main"] --> B{"router-prefix.js가<br/>쿠키의 channel 값 확인"}
+  B -->|"channel = mo"| C["/mo 접두어 자동 부착<br/>→ /mo/main"]
+  B -->|"channel = pc (기본값)"| D["/pc 접두어 자동 부착<br/>→ /pc/main"]
+  C --> E["모바일 스타일로 렌더링"]
+  D --> F["PC 스타일로 렌더링"]
+        </pre>
+        <figcaption>plugins/router-prefix.js가 모든 라우팅 이동을 가로채서 접두어를 붙이는 과정</figcaption>
+      </figure>
+      <h3>동작 원리 3단계</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>단계</th><th>담당 파일</th><th>내용</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>nuxt.config.js</td><td><code>extendRoutes</code>로, 정의된 모든 페이지 경로를 복제해서 <code>/pc/…</code>와 <code>/mo/…</code> 버전을 자동 생성합니다.</td></tr>
+            <tr><td>2</td><td>plugins/router-prefix.js</td><td>라우터가 실제로 이동하기 직전(<code>beforeEach</code>)에 끼어들어, 쿠키의 <code>header_channel</code> 값을 보고 접두어가 빠진 경로면 붙여서 되돌려 보냅니다.</td></tr>
+            <tr><td>3</td><td>store/index.ts</td><td>User-Agent를 분석해 pc/mo/tablet을 자동 판별(<code>utils/device.ts</code>)하고, 그 결과를 전역 상태 <code>device</code>에 저장해 API 요청 헤더 등에도 활용합니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">
+        <span class="icon">🧪</span>
+        <p><strong>로컬 개발 환경의 특이사항</strong> — <code>localhost</code>에서 개발할 때는 실제 사내 인증 시스템이 붙어있지 않기 때문에, <code>router-prefix.js</code>가 <code>header_oamuser</code>, <code>header_channel</code> 쿠키를 자동으로 심어줍니다. 화면 우측 하단에 뜨는 <strong>CookieDevTools</strong> 컴포넌트로 이 값을 직접 바꿔가며 PC/모바일 화면을 테스트할 수 있습니다.</p>
+      </div>
+    </section>
+
+    <!-- 7. 상태관리 -->
+    <section id="store">
+      <div class="section-head">
+        <p class="section-num">07 / 16</p>
+        <h2>상태 관리 (Vuex) — 앱의 공용 칠판</h2>
+      </div>
+      <p class="lede">여러 컴포넌트가 동시에 알아야 하는 정보(로그인 사용자, 로딩 여부, 사이드바 열림 상태 등)를 각자 따로 들고 있으면 서로 어긋나기 쉽습니다. Vuex는 이런 정보를 한 곳(store)에 모아두고, 모든 컴포넌트가 같은 곳을 보게 만듭니다. 이 프로젝트는 store 파일 3개로 구성되어 있습니다.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>파일</th><th>보관하는 정보</th><th>주로 쓰는 곳</th></tr></thead>
+          <tbody>
+            <tr><td>store/index.ts</td><td>로그인 사용자(user), 기기 종류(device: pc/mo/tablet), 전역 로딩 상태, 우측 사이드바 열림 여부</td><td>Header, GlobalLoading, 모든 axios 요청</td></tr>
+            <tr><td>store/audio.ts</td><td>현재 재생 중인 오디오 ID (한 번에 하나만 재생되도록 제어)</td><td>HlsAudio.vue</td></tr>
+            <tr><td>store/relatedItems.ts</td><td>지금 보고 있는 화면과 관련된 자료 목록(이미지·영상·PDF), 우측 패널의 선택 탭</td><td>RightView.vue, design-bible/product-info</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>실제로 쓰이는 예: &ldquo;오디오는 한 번에 하나만 재생&rdquo;</h3>
+      <p>여러 팟캐스트 카드가 화면에 동시에 떠 있어도, 사용자가 새로 재생 버튼을 누르면 이전에 재생 중이던 오디오는 자동으로 멈춥니다. 이건 각 오디오 컴포넌트가 서로를 직접 알지 못해도, <code>store/audio.ts</code>의 <code>currentPlayingId</code> 하나만 보고 있기 때문에 가능합니다.</p>
+      <div class="snippet">
+        <div class="bar"><span>store/audio.ts</span><span class="dots"><span></span><span></span><span></span></span></div>
+        <pre>// 재생 버튼 클릭 → 전역 상태를 내 id로 바꾼다
+handleAudioPlay({ commit }, id) {
+  commit('SET_CURRENT_PLAYING_ID', id)
+}
+
+// 각 플레이어는 전역 id가 "내 id"가 아니게 되면 스스로 멈춘다
+watch: {
+  globalPlayingId(newId) {
+    if (newId !== this.id) player.pause()
+  }
+}</pre>
+      </div>
+    </section>
+
+    <!-- 8. 레이아웃 -->
+    <section id="layout">
+      <div class="section-head">
+        <p class="section-num">08 / 16</p>
+        <h2>공통 레이아웃 &amp; 핵심 컴포넌트</h2>
+      </div>
+      <p class="lede">모든 페이지는 <code>layouts/default.vue</code>라는 &ldquo;틀&rdquo; 안에 끼워져서 렌더링됩니다. 이 틀은 아래처럼 구성되어 있습니다.</p>
+      <figure class="diagram">
+        <pre class="mermaid">
+flowchart TB
+  L["layouts/default.vue"] --> H["Header.vue<br/>상단 로고 · 모바일 메뉴버튼"]
+  L --> LNB["Lnb.vue<br/>좌측 사이드 메뉴(6개 메뉴)"]
+  L --> M["main 영역"]
+  M --> NC["nuxt<br/>= 현재 페이지 (pages/*.vue)"]
+  M --> RV["RightView.vue<br/>우측 관련자료 · AI추천 패널"]
+  M --> DV["DetailView.vue<br/>이미지/영상 확대 팝업"]
+  L --> GL["GlobalLoading.vue<br/>전역 로딩 오버레이"]
+  L --> CDT["CookieDevTools.vue<br/>개발 환경 전용 도구"]
+        </pre>
+        <figcaption>어떤 페이지에 들어가든 이 뼈대는 그대로 유지되고, main 안쪽의 &lt;nuxt/&gt; 부분만 페이지별로 바뀝니다</figcaption>
+      </figure>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>파일</th><th>역할</th></tr></thead>
+          <tbody>
+            <tr><td>Header.vue</td><td>맨 위 로고 &amp; 모바일 화면에서 메뉴 여는 버튼</td></tr>
+            <tr><td>Lnb.vue</td><td>좌측 사이드 내비게이션. 상품나침반·바이블·언더라이팅·약관·숏츠·팟캐스트 6개 메뉴 링크를 가지고 있음</td></tr>
+            <tr><td>RightView.vue</td><td>화면 우측에서 슬라이드되어 나오는 패널. &ldquo;관련자료&rdquo; 탭과 &ldquo;AI 추천&rdquo; 탭 두 가지를 보여줌</td></tr>
+            <tr><td>DetailView.vue</td><td>이미지·영상·PDF를 크게 보는 팝업(모달)</td></tr>
+            <tr><td>GlobalLoading.vue</td><td>store의 <code>isLoading</code> 값이 true가 되면 화면 전체를 덮는 로딩 스피너</td></tr>
+            <tr><td>CookieDevTools.vue</td><td><code>NODE_ENV=development</code>일 때만 보이는 개발용 쿠키 조작 패널</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 9. 페이지별 상세 -->
+    <section id="pages">
+      <div class="section-head">
+        <p class="section-num">09 / 16</p>
+        <h2>페이지별 상세 설명</h2>
+      </div>
+      <p class="lede"><code>pages</code> 폴더의 파일 9개를 하나씩 살펴봅니다. 각 페이지가 화면에 무엇을 보여주고, 어떤 데이터를 어디서 가져오는지 정리했습니다.</p>
+
+      <div class="pagecard">
+        <span class="route">/main</span>
+        <h4>main.vue — 메인 홈 (기본형)</h4>
+        <p>서버에서 카드 목록(<code>/contents/card</code>)을 받아와 <strong>RecommendSection</strong> 컴포넌트로 뿌려주는 단순한 홈 화면입니다. 페이지를 떠날 때 스크롤 위치를 기억해뒀다가, 다시 돌아오면 그 위치로 복원하는 기능이 있습니다.</p>
+        <span class="tag">실제 API 연동</span>
+      </div>
+
+      <div class="pagecard">
+        <span class="route">/main (신버전)</span>
+        <h4>mainNew.vue — 카드형 메인 홈</h4>
+        <p>퀵메뉴 4개(상품나침반·바이블·언더라이팅·약관) + 태그별 색상이 다른 카드 목록 + &ldquo;지금 뜨는 숏츠&rdquo;·&ldquo;인기 팟캐스트&rdquo; 등 여러 섹션으로 구성된 더 화려한 버전의 홈 화면입니다. 현재는 실제 API 대신 <code>utils/mockApi.js</code>의 목(가짜) 데이터를 사용 중입니다.</p>
+        <span class="tag">목데이터 사용 중</span>
+      </div>
+
+      <div class="pagecard">
+        <span class="route">/play</span>
+        <h4>play.vue — 영상/오디오 재생</h4>
+        <p>URL 쿼리(<code>?type=videos&amp;id=…</code>)로 넘어온 콘텐츠를 <strong>Kollus</strong> 컴포넌트(영상 재생 iframe)로 재생합니다. 반복재생·연속재생 토글이 있고, 오른쪽 목록에서 태그별로 필터링할 수 있습니다.</p>
+        <span class="tag">목데이터 사용 중</span>
+      </div>
+
+      <div class="pagecard">
+        <span class="route">/podcast</span>
+        <h4>podcast.vue — 팟캐스트 목록</h4>
+        <p>인기 순위 2개(<code>/contents/rank/score</code> 실제 API 호출)를 상단에 보여주고, 아래는 전체 오디오 목록을 태그별로 골라볼 수 있게 구성했습니다.</p>
+      </div>
+
+      <div class="pagecard">
+        <span class="route">/shorts</span>
+        <h4>shorts.vue — 숏츠 영상 목록</h4>
+        <p>podcast.vue와 거의 동일한 구조이지만 오디오 대신 영상(Video 컴포넌트)을 다룹니다.</p>
+      </div>
+
+      <div class="pagecard">
+        <span class="route">/error</span>
+        <h4>error.vue — 에러 진입점</h4>
+        <p>URL 쿼리로 전달된 <code>statusCode</code>와 <code>message</code>를 읽어, Nuxt의 내장 에러 처리 함수(<code>error()</code>)를 호출해 실제 에러 화면(<code>layouts/error.vue</code>)으로 넘겨주는 &ldquo;중계용&rdquo; 페이지입니다.</p>
+      </div>
+
+      <div class="pagecard">
+        <span class="route">/sales/product-info</span>
+        <h4>product-info.vue — 상품나침반</h4>
+        <p>상품 목록에서 하나를 클릭하면 채팅형 화면으로 전환되고, 추천 질문을 누르거나 직접 입력하면 AI가 실시간 스트리밍으로 답변을 생성합니다. 마이크 버튼으로 음성 인식(<code>SpeechRecognition</code> 브라우저 API) 입력도 지원합니다.</p>
+        <span class="tag">스트리밍 채팅</span><span class="tag">음성 인식</span><span class="tag">목데이터 사용 중</span>
+      </div>
+
+      <div class="pagecard">
+        <span class="route">/sales/design-bible</span>
+        <h4>design-bible.vue — 보장설계 바이블</h4>
+        <p>고객의 성별·연령대·관심 보장(최대 2개)·특이사항을 선택하면, AI가 그 조건에 맞는 상담 화법을 실시간으로 생성합니다. 생성된 화법은 5개 언어로 번역도 가능합니다. 진행 단계를 보여주는 <strong>StepDots</strong> 컴포넌트가 특징입니다.</p>
+        <span class="tag">스트리밍 채팅</span><span class="tag">번역 기능</span>
+      </div>
+
+      <div class="pagecard">
+        <span class="route">/sales/terms</span>
+        <h4>terms.vue — 약관조회</h4>
+        <p>상품명·판매기간·특약을 순서대로 좁혀가며 검색하고, 키워드를 입력하면 관련 약관 문구를 목록으로 보여줍니다. &ldquo;AI답변&rdquo; 스위치를 켜면 검색 결과를 바탕으로 AI 요약도 함께 볼 수 있습니다.</p>
+        <span class="tag">⚠ 코드 이슈 있음 (15번 참고)</span>
+      </div>
+
+      <div class="pagecard">
+        <span class="route">/sales/under</span>
+        <h4>under.vue — 간편 언더라이팅</h4>
+        <p>질병명이나 KCD 코드를 입력하면 자동완성 목록이 뜨고, 하나를 선택하면 보장 가능 여부·인수 기준·유사 질병명·KCD 코드를 정리해 보여줍니다. 방향키(↑↓)와 Enter로 목록을 탐색할 수 있게 만든 접근성 배려가 눈에 띕니다.</p>
+        <span class="tag">⚠ 코드 이슈 있음 (15번 참고)</span>
+      </div>
+    </section>
+
+    <!-- 10. 컴포넌트 -->
+    <section id="components">
+      <div class="section-head">
+        <p class="section-num">10 / 16</p>
+        <h2>컴포넌트 라이브러리 — 재사용 부품 25개</h2>
+      </div>
+      <p class="lede"><code>components</code> 폴더의 파일들은 여러 페이지에서 반복해서 쓰이는 &ldquo;레고 블록&rdquo;입니다. 성격이 비슷한 것끼리 묶어 정리했습니다.</p>
+
+      <h3>미디어 재생 관련</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>파일</th><th>역할</th></tr></thead>
+          <tbody>
+            <tr><td>Audio.vue / Video.vue</td><td>목록에 들어가는 카드 형태의 오디오/영상 썸네일. 클릭하면 재생 페이지로 이동하거나 팝업을 엽니다.</td></tr>
+            <tr><td>HlsAudio.vue / HlsVideo.vue</td><td>HLS(스트리밍) 방식으로 실제 오디오/영상을 재생하는 플레이어. hls.js 라이브러리로 스트림을 재생하고, 재생 전 서버에 &ldquo;지금 스트리밍 가능한지&rdquo;를 먼저 확인합니다.</td></tr>
+            <tr><td>Kollus.vue</td><td>외부 영상 서비스(Kollus)의 플레이어를 iframe으로 삽입. 재생 완료 이벤트를 감지해 반복재생·다음 영상 자동재생을 제어합니다.</td></tr>
+            <tr><td>VideoThumbnail.vue</td><td>영상 파일에서 1초 지점을 캡처해 캔버스로 썸네일 이미지를 자동 생성.</td></tr>
+            <tr><td>Pdf.vue / Images.vue</td><td>PDF·이미지 자료를 카드 형태로 보여주는 썸네일.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>내비게이션 &amp; 레이아웃</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>파일</th><th>역할</th></tr></thead>
+          <tbody>
+            <tr><td>Header.vue / Lnb.vue / RightView.vue</td><td>8번 섹션에서 설명한 상단바·좌측메뉴·우측패널.</td></tr>
+            <tr><td>Link.vue</td><td>파란 그라디언트 배경의 &ldquo;다른 콘텐츠로 이동&rdquo; 카드형 링크 버튼.</td></tr>
+            <tr><td>Rp.vue</td><td>&ldquo;실전 연습 시작&rdquo; 롤플레이 유도 카드(현재는 정적 프로모션 카드).</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>팝업 / 모달</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>파일</th><th>역할</th></tr></thead>
+          <tbody>
+            <tr><td>ModalComponent.vue</td><td>모든 팝업의 기본 틀. 크기(xs~full)를 옵션으로 받고, 헤더·본문·푸터를 슬롯으로 채워 넣는 범용 모달.</td></tr>
+            <tr><td>DetailView.vue</td><td>ModalComponent 위에 이미지/영상/PDF 상세보기를 얹은 팝업.</td></tr>
+            <tr><td>CounselingComment.vue</td><td>ModalComponent 위에 &ldquo;상담멘트&rdquo; 탭(어투별)과 AI 재생성 버튼을 얹은 팝업.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>폼 입력 부품</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>파일</th><th>역할</th></tr></thead>
+          <tbody>
+            <tr><td>FormInput.vue</td><td>지우기(x) 버튼과 방향키·엔터 이벤트를 지원하는 공용 텍스트 입력창.</td></tr>
+            <tr><td>FormSwitch.vue</td><td>ON/OFF 토글 스위치. terms.vue의 &ldquo;AI답변&rdquo; 켜기/끄기에 사용.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>목록 / 추천 섹션</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>파일</th><th>역할</th></tr></thead>
+          <tbody>
+            <tr><td>RecommendSection.vue</td><td>메인 홈의 대형 추천 카드 섹션. 카드가 2개 이상이면 스와이프 슬라이더로 자동 전환.</td></tr>
+            <tr><td>SectionRecommendVideo/Audio.vue</td><td>mainNew.vue의 &ldquo;지금 뜨는 숏츠 / 지금 바로 들어봐요&rdquo; 그리드·리스트 섹션.</td></tr>
+            <tr><td>SectionPopularVideo/Audio.vue</td><td>mainNew.vue의 &ldquo;인기숏츠 / 인기팟캐스트&rdquo; 순위 섹션 (1위~ 랭킹 숫자 강조).</td></tr>
+            <tr><td>RelatedData.vue</td><td>RightView.vue 이전 버전으로 보이는 관련자료 패널(현재 페이지에서는 직접 쓰이지 않음).</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>기타 UI 유틸리티</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>파일</th><th>역할</th></tr></thead>
+          <tbody>
+            <tr><td>Accordion.vue</td><td>슬롯 기반의 범용 아코디언(접고 펼치기). 여러 개 동시에 열기(multiple) 옵션 지원.</td></tr>
+            <tr><td>TabComponent.vue</td><td>Vue 3 스타일(<code>&lt;script setup&gt;</code>) 문법으로 작성된 범용 탭 UI.</td></tr>
+            <tr><td>StepDots.vue</td><td>&ldquo;AI가 분석 중입니다&rdquo; 같은 4단계 진행 표시 점(dot) 애니메이션.</td></tr>
+            <tr><td>GlobalLoading.vue / CookieDevTools.vue</td><td>8번 섹션 참고.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 11. 스트리밍 -->
+    <section id="streaming">
+      <div class="section-head">
+        <p class="section-num">11 / 16</p>
+        <h2>실시간 스트리밍 채팅은 어떻게 동작하는가</h2>
+      </div>
+      <p class="lede">이 앱에서 가장 &ldquo;AI스러운&rdquo; 경험 — 답변 글자가 타이핑되듯 실시간으로 나타나는 효과 — 은 <code>utils/stream-service.ts</code> 하나가 담당합니다. ChatGPT 같은 서비스에서 익숙하게 보셨을 그 효과와 같은 원리입니다.</p>
+      <figure class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+  participant U as 사용자
+  participant C as 페이지<br/>(design-bible.vue 등)
+  participant S as StreamService<br/>utils/stream-service.ts
+  participant B as 백엔드 AI 서버
+
+  U->>C: "맞춤 화법 생성" 버튼 클릭
+  C->>S: this.$stream.fetchStream(url, params, 콜백)
+  S->>B: fetch(POST), 응답을 스트림으로 요청
+  B-->>S: 답변을 잘게 쪼개(chunk) 순차적으로 전송
+  loop 데이터가 끝날 때까지
+    S->>C: onChunk(글자 조각)
+    C->>U: 화면에 이어붙여 실시간 표시
+  end
+  B-->>S: 전송 종료 신호
+  S->>C: onFinished() 호출
+  C->>U: "번역하기" 버튼 등 후속 UI 활성화
+        </pre>
+        <figcaption>버튼 클릭부터 AI 답변이 실시간으로 타이핑되기까지</figcaption>
+      </figure>
+      <h3>핵심 기술: ReadableStream</h3>
+      <p>일반적인 API 요청은 &ldquo;서버가 답변을 다 만든 뒤 한 번에&rdquo; 돌려받습니다. 하지만 AI 답변은 만들어지는 데 몇 초~몇십 초가 걸릴 수 있어서, 다 만들어질 때까지 기다리면 사용자는 그동안 빈 화면만 보게 됩니다. 그래서 이 앱은 브라우저의 <code>fetch</code> API가 제공하는 <strong>ReadableStream</strong> 기능을 사용해, 서버가 글자를 만드는 족족 조각(chunk) 단위로 받아 바로바로 화면에 이어붙입니다.</p>
+      <div class="snippet">
+        <div class="bar"><span>utils/stream-service.ts</span><span class="dots"><span></span><span></span><span></span></span></div>
+        <pre>const reader = res.body.getReader()
+while (true) {
+  const { done, value } = await reader.read()
+  if (done) break
+  options.onChunk(decoder.decode(value))  // 조각이 도착할 때마다 즉시 화면에 반영
+}</pre>
+      </div>
+      <p>이 서비스를 쓰는 페이지는 <strong>product-info.vue</strong>(상품 Q&amp;A), <strong>design-bible.vue</strong>(화법 생성·번역), <strong>CounselingComment.vue</strong>(상담멘트 재생성), <strong>under.vue</strong>(질병 인사이트) 총 4곳입니다. 사용자가 다른 화면으로 이동하면 <code>stop()</code>이 호출되어 진행 중이던 스트림 요청을 즉시 취소합니다.</p>
+    </section>
+
+    <!-- 12. 에러 처리 -->
+    <section id="errors">
+      <div class="section-head">
+        <p class="section-num">12 / 16</p>
+        <h2>에러 &amp; 세션 처리</h2>
+      </div>
+      <p class="lede">서버 응답이 실패하거나 세션이 만료됐을 때, 사용자에게 어떤 화면을 보여줄지를 정하는 흐름입니다.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>상황</th><th>처리 방식</th></tr></thead>
+          <tbody>
+            <tr><td>서버 응답의 <code>result_cd</code>가 EP(세션만료)</td><td>알림창 표시 후 첫 화면(<code>/</code>)으로 강제 이동</td></tr>
+            <tr><td><code>result_cd</code>가 NA/BE (권한없음)</td><td>403 에러 화면으로 이동</td></tr>
+            <tr><td>HTTP 상태 404</td><td>&ldquo;페이지를 찾을 수 없습니다&rdquo; 에러 화면</td></tr>
+            <tr><td>HTTP 상태 422 또는 500</td><td>세션 만료 처리와 동일하게 재접속 유도</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>실제 에러 화면은 <code>layouts/error.vue</code>가 그리며, 상태코드별로 제목·설명·버튼(홈으로/이전으로/다시시도)을 다르게 보여줍니다. <code>pages/error.vue</code>는 쿼리스트링으로 넘어온 상태코드를 읽어 Nuxt의 에러 시스템에 전달해주는 역할만 합니다.</p>
+    </section>
+
+    <!-- 13. 스타일 -->
+    <section id="styles">
+      <div class="section-head">
+        <p class="section-num">13 / 16</p>
+        <h2>스타일 시스템 (SCSS)</h2>
+      </div>
+      <p class="lede">모든 <code>.vue</code> 파일의 <code>&lt;style&gt;</code>은 <code>assets/styles/common.scss</code>에 정의된 공통 변수·믹스인(재사용 스타일 함수)을 자동으로 불러와 쓸 수 있게 설정되어 있습니다(<code>styleResources</code>).</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>파일</th><th>내용</th></tr></thead>
+          <tbody>
+            <tr><td>base.scss</td><td>브라우저 기본 스타일 초기화(reset)</td></tr>
+            <tr><td>fonts.scss</td><td>웹폰트 정의</td></tr>
+            <tr><td>layout.scss</td><td>공통 레이아웃 골격 스타일</td></tr>
+            <tr><td>common.scss</td><td><code>rem()</code> 같은 단위 변환 함수, <code>flexbox()</code> 믹스인 등 재사용 도구</td></tr>
+            <tr><td>wiz.scss</td><td>추가 컴포넌트 스타일 모음</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>대부분의 화면은 1280px, 1024px, 768px, 512px 기준으로 반응형 분기를 두고 있어, 같은 컴포넌트가 PC 화면과 모바일 화면에서 배치만 다르게 나타나는 경우가 많습니다(예: play.vue의 좌우 배치 → 상하 배치 전환).</p>
+    </section>
+
+    <!-- 14. 배포 -->
+    <section id="deploy">
+      <div class="section-head">
+        <p class="section-num">14 / 16</p>
+        <h2>빌드 &amp; 배포는 어떻게 이뤄지나</h2>
+      </div>
+      <p class="lede">환경마다 접속하는 API 주소가 다르기 때문에, 이 프로젝트는 환경별로 파일을 나눠 관리합니다.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>환경</th><th>환경변수 파일</th><th>실행 명령</th></tr></thead>
+          <tbody>
+            <tr><td>로컬 개발</td><td>.env.development</td><td><code>npm run dev</code></td></tr>
+            <tr><td>QA(검증)</td><td>.env.qa</td><td><code>npm run build_qa</code> → <code>npm run start_qa</code></td></tr>
+            <tr><td>운영(내부망)</td><td>.env.production</td><td><code>npm run build</code> → <code>npm run start</code></td></tr>
+            <tr><td>운영(외부망)</td><td>.env.production_ext</td><td><code>npm run build_ext</code> → <code>npm run start_ext</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>운영 서버에서는 <code>ecosystem.*.config.js</code> 설정을 <strong>PM2</strong>가 읽어, 앱이 예기치 않게 죽어도 자동으로 재시작합니다. <code>scripts/</code> 폴더의 쉘 스크립트들이 이 명령어들을 감싸서 <code>start-dev.sh</code>, <code>stop-qa.sh</code> 같은 형태로 더 간편하게 실행할 수 있게 해줍니다.</p>
+      <div class="callout">
+        <span class="icon">🖥️</span>
+        <p><strong>이 문서를 만들며 확인한 것</strong> — 이 프로젝트는 Node 18+ 를 요구하는 최신 패키지가 섞여 있지만, Nuxt 2·Webpack 4 기반이라 실제로는 <strong>Node 16</strong> 환경에서 안정적으로 빌드·실행됩니다(nvm으로 버전을 맞춰 로컬 구동을 확인했습니다).</p>
+      </div>
+    </section>
+
+    <!-- 15. 코드 리뷰 -->
+    <section id="review">
+      <div class="section-head">
+        <p class="section-num">15 / 16</p>
+        <h2>코드 리뷰 — 발견된 이슈</h2>
+      </div>
+      <p class="lede">전체 코드를 훑으며 눈에 띈 문제와 특이사항을 심각도별로 정리했습니다. <span class="sev bug" style="display:inline-flex">버그</span>는 실제로 동작이 깨질 수 있는 부분, <span class="sev warn" style="display:inline-flex">주의</span>는 당장은 문제없지만 유지보수 시 헷갈릴 수 있는 부분, <span class="sev note" style="display:inline-flex">참고</span>는 의도된 설계로 보이는 특이점입니다.</p>
+
+      <div class="finding">
+        <span class="sev bug">버그</span>
+        <div>
+          <h4>정의되지 않은 변수 참조 — terms.vue / under.vue</h4>
+          <p class="loc">pages/sales/terms.vue:425, 469 · pages/sales/under.vue:265, 387</p>
+          <p><code>sendKeyword()</code>, <code>startStreaming()</code> 함수 안에서 <code>getUserInfo()</code>, <code>api.post(...)</code>, <code>token</code> 같은 이름을 사용하는데, 이 파일 어디에서도 import하거나 선언한 적이 없습니다. 실제로 이 함수가 호출되면 &ldquo;정의되지 않음(ReferenceError)&rdquo; 오류로 그 자리에서 멈춥니다. 다행히 현재는 <code>termsAutocomplete()</code>, <code>Under()</code> 같은 목데이터 함수로 화면 흐름을 대신 보여주고 있어 평소 사용 중엔 이 코드 경로를 타지 않지만, 실제 검색 전송(send) 버튼을 누르는 순간 문제가 드러날 수 있습니다.</p>
+        </div>
+      </div>
+
+      <div class="finding">
+        <span class="sev bug">버그</span>
+        <div>
+          <h4>템플릿 문법 오류 — CounselingComment.vue</h4>
+          <p class="loc">components/CounselingComment.vue:165</p>
+          <p><code>&lt;template v-if="currentItem.isGenerating" || currentItem.streamText&gt;</code>처럼 <code>||</code> 연산자가 따옴표 밖으로 빠져나와 있습니다. Vue 템플릿 컴파일 시 <code>v-if</code> 값은 <code>"currentItem.isGenerating"</code>까지만 인식되고, 뒤의 <code>|| currentItem.streamText</code>는 잘못된 속성으로 처리되어 의도한 조건(생성 중이거나 이미 텍스트가 있으면 보여주기)이 정확히 동작하지 않을 가능성이 있습니다. <code>v-if="currentItem.isGenerating || currentItem.streamText"</code>로 따옴표 안에 전부 넣어야 합니다.</p>
+        </div>
+      </div>
+
+      <div class="finding">
+        <span class="sev warn">주의</span>
+        <div>
+          <h4>실제 API 대신 목데이터를 쓰는 화면이 많음</h4>
+          <p class="loc">mainNew.vue, play.vue, podcast.vue, shorts.vue, product-info.vue, terms.vue, under.vue</p>
+          <p>많은 페이지에서 실제 <code>this.$axios</code> 호출 코드가 주석 처리되어 있고, 대신 <code>utils/mockApi.js</code>(256KB 분량의 하드코딩된 샘플 데이터)를 사용하고 있습니다. 디자인·시연 단계에서는 유용하지만, 실서비스 연동 시 이 주석들을 하나씩 원복하고 응답 데이터 구조가 목데이터와 정확히 일치하는지 검증하는 작업이 필요합니다.</p>
+        </div>
+      </div>
+
+      <div class="finding">
+        <span class="sev warn">주의</span>
+        <div>
+          <h4>Kollus.vue의 message 이벤트 리스너가 해제되지 않음</h4>
+          <p class="loc">components/Kollus.vue:58</p>
+          <p><code>onIframeLoad()</code> 안에서 <code>window.addEventListener('message', ...)</code>를 등록하는데, <code>beforeDestroy</code>에서 이를 <code>removeEventListener</code>로 해제하는 코드가 없습니다. 영상 재생 페이지를 여러 번 드나들면 리스너가 계속 누적되어, 장시간 사용 시 불필요한 메모리 사용과 중복 로그 출력으로 이어질 수 있습니다.</p>
+        </div>
+      </div>
+
+      <div class="finding">
+        <span class="sev note">참고</span>
+        <div>
+          <h4>전역 window 변수로 스크롤 위치를 저장</h4>
+          <p class="loc">pages/main.vue:19</p>
+          <p><code>window.__MAIN_SCROLL_POS__</code>라는 전역 변수에 스크롤 위치를 저장했다가 복원합니다. Vuex나 컴포넌트 상태를 쓰지 않고 브라우저 전역 객체를 직접 쓰는 방식이라 일반적인 패턴은 아니지만, 이 페이지 하나에서만 쓰이고 있어 당장 부작용은 없습니다.</p>
+        </div>
+      </div>
+
+      <div class="finding">
+        <span class="sev note">참고</span>
+        <div>
+          <h4>파일 상단 주석과 실제 파일명 불일치</h4>
+          <p class="loc">store/relatedItems.ts:1</p>
+          <p>파일 맨 위 주석은 <code>// store/relatedData.ts</code>로 적혀 있지만 실제 파일명은 <code>relatedItems.ts</code>입니다. 예전에 이름을 바꾸며 주석만 남은 것으로 보이며, 동작에는 영향이 없지만 다음에 이 파일을 여는 사람이 잠깐 헷갈릴 수 있습니다.</p>
+        </div>
+      </div>
+
+      <div class="finding">
+        <span class="sev note">참고</span>
+        <div>
+          <h4>내부 메서드 이름 오탈자</h4>
+          <p class="loc">utils/stream-service.ts:82</p>
+          <p><code>cleanup()</code>이어야 할 내부(private) 메서드 이름이 <code>clenaup()</code>으로 되어 있습니다. 외부에서 호출되지 않는 내부 함수라 동작에는 문제가 없지만, 다음 수정 시 짚고 넘어가면 좋습니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 16. 용어 사전 -->
+    <section id="glossary">
+      <div class="section-head">
+        <p class="section-num">16 / 16</p>
+        <h2>용어 사전</h2>
+      </div>
+      <p class="lede">문서 안에서 자주 등장한 개발 용어를 쉬운 말로 풀었습니다.</p>
+      <dl class="glossary">
+        <div class="gterm"><dt>컴포넌트 (Component)</dt><dd>화면을 이루는 독립적인 부품 단위. 버튼 하나, 카드 하나처럼 재사용 가능한 조각.</dd></div>
+        <div class="gterm"><dt>props</dt><dd>부모 컴포넌트가 자식 컴포넌트에게 전달하는 데이터. &ldquo;이 카드에 이 정보를 보여줘&rdquo;라고 넘겨주는 값.</dd></div>
+        <div class="gterm"><dt>computed</dt><dd>다른 데이터를 조합해서 자동으로 계산되는 값. 원본 데이터가 바뀌면 자동으로 다시 계산됨.</dd></div>
+        <div class="gterm"><dt>watch</dt><dd>특정 데이터가 바뀌는 순간을 감지해서 원하는 동작을 실행시키는 기능.</dd></div>
+        <div class="gterm"><dt>라우팅 (Routing)</dt><dd>URL 주소에 따라 어떤 화면을 보여줄지 결정하는 시스템.</dd></div>
+        <div class="gterm"><dt>미들웨어 (Middleware)</dt><dd>페이지가 열리기 전에 먼저 실행되는 검문소 같은 코드. 인증 확인 등에 쓰임.</dd></div>
+        <div class="gterm"><dt>플러그인 (Plugin)</dt><dd>앱이 시작될 때 한 번만 실행되어 전역 기능을 준비해두는 초기화 코드.</dd></div>
+        <div class="gterm"><dt>프록시 (Proxy)</dt><dd>브라우저의 요청을 대신 받아 실제 서버로 전달해주는 중계 서버.</dd></div>
+        <div class="gterm"><dt>인터셉터 (Interceptor)</dt><dd>모든 요청/응답이 지나가는 길목에서 공통 처리를 해주는 관문.</dd></div>
+        <div class="gterm"><dt>스트리밍 (Streaming)</dt><dd>데이터를 한 번에 다 받는 게 아니라, 조금씩 나눠서 실시간으로 받는 방식.</dd></div>
+        <div class="gterm"><dt>SSR / CSR</dt><dd>SSR(서버렌더링)은 서버가 화면 HTML을 미리 만들어 보내는 방식, CSR(클라이언트렌더링)은 브라우저가 직접 화면을 그리는 방식. 이 프로젝트는 <code>ssr: false</code>로 CSR을 사용합니다.</dd></div>
+        <div class="gterm"><dt>목데이터 (Mock Data)</dt><dd>실제 서버 없이도 화면을 테스트할 수 있도록 미리 만들어둔 가짜 샘플 데이터.</dd></div>
+        <div class="gterm"><dt>목데이터 (Mock)</dt><dd>위와 동일 — 실제 데이터를 흉내낸 임시 데이터.</dd></div>
+        <div class="gterm"><dt>SCSS</dt><dd>CSS(디자인 언어)에 변수·함수 같은 프로그래밍적 기능을 더한 확장 언어.</dd></div>
+        <div class="gterm"><dt>Vuex / store</dt><dd>앱 전체가 공유하는 데이터를 한 곳에 모아두는 저장소.</dd></div>
+      </dl>
+    </section>
+
+    <hr class="div">
+    <p style="color:var(--ink-faint); font-size:13px;">이 문서는 2026년 8월 28일 기준 <code>asp-fc-search-front</code> 저장소의 코드를 직접 읽고 정리했습니다. 이후 코드가 변경되면 일부 내용이 실제와 달라질 수 있습니다.</p>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  function paintMermaid(dark){
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: dark ? 'dark' : 'neutral',
+      themeVariables: {
+        fontFamily: "'IBM Plex Sans KR', sans-serif",
+        primaryColor: dark ? '#212a52' : '#ecefff',
+        primaryTextColor: dark ? '#e9ebf2' : '#14171f',
+        primaryBorderColor: dark ? '#8fa0ff' : '#3548d4',
+        lineColor: dark ? '#8fa0ff' : '#3548d4',
+        secondaryColor: dark ? '#1b1f2b' : '#f1f2f7',
+        tertiaryColor: dark ? '#151822' : '#ffffff',
+      },
+    });
+    document.querySelectorAll('pre.mermaid').forEach((el) => {
+      if (!el.dataset.src) el.dataset.src = el.textContent;
+      el.removeAttribute('data-processed');
+      el.innerHTML = el.dataset.src;
+    });
+    mermaid.run({ querySelector: 'pre.mermaid' });
+  }
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  paintMermaid(prefersDark);
+</script>
+</body>
+</html>

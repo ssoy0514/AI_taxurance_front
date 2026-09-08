@@ -5,10 +5,14 @@ import Images from '@/components/Images.vue'
 import Video from '@/components/Video.vue'
 import Link from '@/components/Link.vue'
 import StepDots from '@/components/StepDots.vue'
+import AssetTypeSurvey from '@/components/AssetTypeSurvey.vue'
+import AssetTypeSurveyResult from '@/components/AssetTypeSurveyResult.vue'
+import { getSurveyType } from '@/utils/assetSurveyData'
+
 
 export default {
-  name: 'Taxurance',
-  components: { RightView, Images, Video, Link, StepDots },
+  name: 'Taxurance2',
+  components: { RightView, Images, Video, Link, StepDots, AssetTypeSurvey, AssetTypeSurveyResult },
 
   data() {
     return {
@@ -16,19 +20,17 @@ export default {
       interestOptions : ['상속', '증여', '개인사업자'],
       genderOptions: ['여성', '남성'],
       ageOptions: ['~30대','40대', '50대', '60대', '70대', '80대~'],
+      transOptions: ['영어', '중국어', '태국어', '베트남어', '러시아어'],
       considerOptions: [
-        ['기본', '거주자/비거주자', '보험활용', '부동산 자산', '자금출처'], // 그외
-        ['2차상속', '상속공제', '상속설계', '상속분쟁', '상속세', '상속재산종류'], // 상속
-        [ '상속절차', '증여공제', '증여설계', '증여세', '세금설계'], // 증여
-    ],
-      filters: {
-        interest : '상속',
-        sex: '남성',
-        age: '~30대', 
-        considerations: ['기본'], 
-        requirement: '', 
-        prev_speech: '', 
-      },
+            { label: '이슈 카테고리1', items: ['기본', '거주자/비거주자', '보험활용', '부동산 자산', '자금출처'] },
+            { label: '이슈 카테고리2', items: ['2차상속', '상속공제', '상속설계', '상속분쟁', '상속세', '상속재산종류'] },
+            { label: '이슈 카테고리3', items: ['상속절차', '증여공제', '증여설계', '증여세', '세금설계'] },
+            { label: '이슈 카테고리4', type: 'survey', items: [] },
+          ],
+
+      openConsiderCategories: [],
+
+      filters: this.createDefaultFilters(),
 
       resultFilters: {},
       messages: [], 
@@ -73,6 +75,12 @@ export default {
       return Object.keys(this.resultFilters).length > 0
     },
 
+    submitButtonLabel() {
+      return getSurveyType(this.filters.opening_survey)
+        ? '고객 성향 진단 및 맞춤화법 생성하기'
+        : '맞춤 화법 생성'
+    },
+
     isSidebarOpen() {
       return this.$store.state.isSidebarOpen
     },
@@ -114,6 +122,18 @@ export default {
 
   methods: {
     renderMarkdown,
+
+    createDefaultFilters() {
+      return {
+        interest: '상속',
+        sex: '남성',
+        age: '~30대',
+        considerations: ['기본'],
+        opening_survey: { q1: '', q2: '', q3: '' },
+        requirement: '',
+        prev_speech: '',
+      }
+    },
 
     // 3) 관련자료 호출의 기준?
     // 4) 같은 api 에 컨텐츠가 있는건지
@@ -254,9 +274,29 @@ ${points}
 // 6) 이슈사항 개수 제한?
     isMaxSelected(value) {
     return (
-        this.filters.considerations.length >= 2 && 
+        this.filters.considerations.length >= 2 &&
         !this.filters.considerations.includes(value)
     )
+    },
+
+    isConsiderOpen(label) {
+      return this.openConsiderCategories.includes(label)
+    },
+    toggleConsiderOpen(category) {
+      const label = category.label
+      const isOpen = this.isConsiderOpen(label)
+
+      // 설문 카테고리는 상단 "고객 정보"에서 연령대를 먼저 골라야 열 수 있음
+      if (!isOpen && category.type === 'survey' && !this.filters.age) {
+        alert('필수값을 입력하세요')
+        return
+      }
+
+      if (isOpen) {
+        this.openConsiderCategories = this.openConsiderCategories.filter((l) => l !== label)
+      } else {
+        this.openConsiderCategories.push(label)
+      }
     },
 
     submitFilter() {
@@ -266,9 +306,11 @@ ${points}
         this.resultFilters = {
         ...this.filters,
         considerations: [...this.filters.considerations],
+        // "맞춤 화법 생성" 클릭 시점에 성향 진단을 확정. 백엔드로는 답변이 아니라 유형 번호만 보내면 됨
+        opening_survey: getSurveyType(this.filters.opening_survey),
         }
 
-        this.submitType = 'first' 
+        this.submitType = 'first'
         this.fetchContents() 
         this.startStreaming()
 
@@ -346,6 +388,23 @@ ${points}
       })
     },
 
+    goHome() {
+      this.stopStreaming()
+      this.clearTicker()
+
+      this.filters = this.createDefaultFilters()
+      this.resultFilters = {}
+      this.messages = []
+      this.relatedData = []
+      this.openConsiderCategories = []
+      this.submitType = ''
+      this.text = ''
+      this.currentStep = 0
+      this.isTyping = false
+
+      this.handleChangeView('list')
+    },
+
     handleSaveSpeech() {
       alert('저장되었습니다.')
     },
@@ -384,7 +443,7 @@ ${points}
         <section>
           <div class="wrap-sub-title">
             <p class="sub-title">
-              <strong>VVIP 고객 재무 설계</strong>
+              <strong>고객 맞춤형 재무 설계</strong>
             </p>
           </div>
         </section>
@@ -442,20 +501,31 @@ ${points}
                   <span class="txt-no-required">(선택)</span>
                 </p>
 
-                <div class="wrap-label chk-st3">
-                  <div v-for="(row, ri) in considerOptions" :key="ri" class="chk-st3-row">
-                    <label v-for="item in row" :key="item">
-                      <input
-                        type="checkbox"
-                        :value="item"
-                        v-model="filters.considerations"
+                <div class="consider-accordion">
+                  <div v-for="(category, ci) in considerOptions" :key="ci" class="consider-accordion-item">
+                    <div
+                      class="consider-accordion-header"
+                      :class="{ open: isConsiderOpen(category.label) }"
+                      @click="toggleConsiderOpen(category)"
+                    >
+                      <span class="consider-toggle-label">{{ category.label }}</span>
+                    </div>
+                    <div v-show="isConsiderOpen(category.label)" class="consider-accordion-body">
+                      <AssetTypeSurvey
+                        v-if="category.type === 'survey'"
+                        v-model="filters.opening_survey"
+                        :age="filters.age"
                       />
-                      <p>
-                        {{ item }}
-                      </p>
-                    </label>
+                      <div v-else class="consider-item-row">
+                        <label v-for="item in category.items" :key="item">
+                          <input type="checkbox" :value="item" v-model="filters.considerations" />
+                          <p>{{ item }}</p>
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 </div>
+
 
                 <input
                   type="text"
@@ -475,7 +545,7 @@ ${points}
               :disabled="!isFormValid"
               @click="submitFilter"
             >
-              맞춤 화법 생성
+              {{ submitButtonLabel }}
             </button>
           </section>
         </div>
@@ -486,7 +556,7 @@ ${points}
           <!-- 고정해더: 홈(목록으로) 버튼 + 지금 조건(성별/연령대/관심보장) 요약 표시 -->
           <div class="filter-top">
             <!-- 목록 화면으로 되돌아가는 버튼 (mode=list로 전환) -->
-            <button class="btn" @click="handleChangeView('list')">
+            <button class="btn" @click="goHome">
               <i class="icon-mm icon-home"></i>
             </button>
             <div class="wrap-select">
@@ -539,6 +609,12 @@ ${points}
                   </li>
                 </ul>
               </div>
+
+              <AssetTypeSurveyResult
+                v-if="hasResult"
+                :type="resultFilters.opening_survey"
+                :age="resultFilters.age"
+              />
 
               <!-- 실제 대화 메시지 목록 (messages 배열을 순회) -->
               <div
@@ -677,7 +753,11 @@ ${points}
   }
   > .wrap-label:first-child {
     flex: 0 0 auto;
+    label p {
+      padding: rem(8) rem(16);
+    }
   }
+
   > .wrap-label:last-child {
     flex: 1 1 0;
   }
@@ -703,6 +783,21 @@ ${points}
       padding: rem(8) rem(28);
       font-size: 13px; // rd-st1--fit(연령대)과 통일
       white-space: nowrap;
+    }
+  }
+}
+
+@media (max-width: 512px) {
+  .wrap-row-half {
+    flex-direction: column;
+  }
+  .wrap-row-half > .wrap-label:last-child {
+    width: 100%;
+  }
+  .rd-st1--fit,
+  .rd-st1--fit-wide {
+    label p {
+      white-space: normal;
     }
   }
 }
@@ -823,12 +918,46 @@ ${points}
   }
 }
 
-/* 고객 특이사항 체크박스 스타일 (알약 형태로 나열) */
-.chk-st3 {
-  @include flexbox(flex-start, normal);
-  flex-direction: column;
-  gap: rem(8);
+.consider-accordion {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: #fff;
+}
+.consider-accordion-item {
+  border-bottom: 1px solid #e2e8f0;
+  &:last-child {
+    border-bottom: none;
+  }
+}
+.consider-accordion-header {
+  padding: rem(10) rem(16); // 높이 축소
+  background-color: #fff; // 평소엔 흰색
+  cursor: pointer;
+  transition: background-color 0.15s;
+  &.open {
+    background-color: #f1f5f9; // 펼쳐지면 회색
+  }
+}
+.consider-accordion-body {
+  padding: rem(12) rem(16) rem(14);
+  background-color: #fff;
+}
+.consider-toggle-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #314158;
+}
+.consider-item-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
   label {
+    // 체크박스는 기능만 남기고 화면엔 안 보이게 (알약 색 변화로만 선택 표시)
+    input[type='checkbox'] {
+      display: none;
+    }
     p {
       padding: 5px 13px;
       border: 1px solid #e2e8f0;
@@ -836,6 +965,7 @@ ${points}
       border-radius: 10px;
       color: #62748e;
       font-size: 14px;
+      cursor: pointer;
     }
     input:checked {
       + p {
@@ -845,15 +975,7 @@ ${points}
         font-weight: 500;
       }
     }
-    input:disabled + p {
-      opacity: 0.5;
-    }
   }
-}
-.chk-st3-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
 }
 
 /* 결과 화면 상단 "제출 조건 요약" 카드 스타일 */
