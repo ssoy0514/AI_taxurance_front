@@ -23,7 +23,7 @@
 </template>
 
 <script>
-import { ageOptions, ageQuestions, mapFilterAgeToSurveyAge } from '~/utils/assetSurveyData'
+import { ageOptions, ageQuestions, mapFilterAgeToSurveyAge } from '~/utils/mockTaxurance'
 
 export default {
   name: 'AssetTypeSurvey',

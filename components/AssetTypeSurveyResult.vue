@@ -19,7 +19,7 @@
 </template>
 
 <script>
-import { surveyTypeResults, scriptDB, mapFilterAgeToSurveyAge } from '~/utils/assetSurveyData'
+import { surveyTypeResults, scriptDB, mapFilterAgeToSurveyAge } from '~/utils/mockTaxurance'
 
 export default {
   name: 'AssetTypeSurveyResult',

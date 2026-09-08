@@ -7,7 +7,7 @@ import Link from '@/components/Link.vue'
 import StepDots from '@/components/StepDots.vue'
 import AssetTypeSurvey from '@/components/AssetTypeSurvey.vue'
 import AssetTypeSurveyResult from '@/components/AssetTypeSurveyResult.vue'
-import { getSurveyType } from '@/utils/assetSurveyData'
+import { getSurveyType, getCoverageContents, getTaxuranceGuide } from '@/utils/mockTaxurance'
 
 
 export default {
@@ -135,28 +135,11 @@ export default {
       }
     },
 
-    // 3) 관련자료 호출의 기준?
-    // 4) 같은 api 에 컨텐츠가 있는건지
-    async fetchContents() {
-      // ══ [TEMP - 캡처용, 캡처 후 이 return 지우고 아래 원래 코드 살릴 것] ══
-      // /coverage/contents 백엔드가 없어서 호출 자체를 건너뜀. try/catch로는 못 막음 -
-      // plugins/axios.ts의 onError 인터셉터가 실패 응답을 받는 즉시 nuxtError()를
-      // 직접 호출해서 에러 페이지로 전환시켜버리기 때문에, 아예 요청을 안 보내는 게 확실함.
-      return
-      // ══ [TEMP 블록 끝] ══
-
-      // eslint-disable-next-line no-unreachable
-      try {
-        const { items, succ } = await this.$axios.post('/coverage/contents', {
-          interest: this.filters.interest,
-          considerations: this.filters.considerations,
-        })
-        if (succ) {
-          this.toggleRelatedDataMapping(true, items)
-          this.relatedData = items
-        }
-      } catch (e) {
-        console.warn('[fetchContents] 관련자료 조회 실패(백엔드 미연결 등):', e)
+    fetchContents() {
+      const { succ, items } = getCoverageContents(this.filters.interest, this.filters.considerations)
+      if (succ) {
+        this.toggleRelatedDataMapping(true, items)
+        this.relatedData = items
       }
     },
 
@@ -181,66 +164,13 @@ export default {
         params = this.filters
       }
 
-      // ══════════════ [TEMP - 캡처용, 캡처 후 이 블록 통째로 지우고 아래 원래 코드 주석 풀 것] ══════════════
-      // 백엔드(/taxurance/guide/make) 아직 없어서, 실제 스트리밍 대신 샘플 화법을 즉시 채워넣음
       await this.$nextTick()
       const last = this.messages[this.messages.length - 1]
-      this.$set(last, 'content', this.buildSampleSpeech())
+      this.$set(last, 'content', getTaxuranceGuide(params))
       this.$set(last, 'readyTrans', true)
       this.$nextTick(() => this.scrollToBottom(false))
       this.isTyping = false
       this.clearTicker()
-      return
-      // ══════════════ [TEMP 블록 끝] ══════════════
-
-      // eslint-disable-next-line no-unreachable
-// 5) 백엔드 api 주소 변경에 따라..
-      await this.$stream.fetchStream('/taxurance/guide/make', params, {
-        onChunk: (chunk) => {
-          const last = this.messages[this.messages.length - 1]
-          this.$set(last, 'content', (last.content || '') + chunk)
-          this.$nextTick(() => this.scrollToBottom(false))
-        },
-        onFinished: () => {
-          const last = this.messages[this.messages.length - 1]
-          this.$set(last, 'readyTrans', true)
-
-          this.$nextTick(() => this.scrollToBottom(false))
-
-          this.isTyping = false
-
-          this.clearTicker()
-        },
-      })
-    },
-
-    // [TEMP - 캡처용, 위 TEMP 블록과 함께 지울 것] 선택된 조건에 맞춰 그럴듯한 샘플 화법 텍스트를 생성
-    buildSampleSpeech() {
-      const { interest, sex, age, considerations } = this.filters
-      const points = (considerations && considerations.length > 0
-        ? considerations
-        : ['기본']
-      )
-        .map((c) => `- **${c}**: 고객님 상황에 맞춰 ${c} 관련 유의사항과 절세 포인트를 함께 안내드립니다.`)
-        .join('\n')
-
-      return `${age} ${sex} 고객님, 안녕하세요. 오늘은 **${interest}** 관련하여 상담을 도와드리겠습니다.
-
-말씀해주신 내용을 바탕으로, 아래와 같은 순서로 안내드리는 것을 추천드립니다.
-
-**1. 현재 상황 점검**
-고객님의 자산 구성과 가족관계를 먼저 확인하여, ${interest} 진행 시 예상되는 세부담과 절차를 안내드립니다.
-
-**2. 중점 안내 항목**
-${points}
-
-**3. 보험 활용 방안**
-종신보험 등 보장성 보험을 활용하면 ${interest} 발생 시 필요한 자금을 미리 준비해둘 수 있어, 급하게 자산을 처분하지 않아도 되는 장점이 있습니다.
-
-**4. 다음 단계**
-정확한 세액 산출을 위해서는 세무 전문가와의 협업이 필요하며, 고객님의 자산 현황 자료를 준비해주시면 보다 구체적인 설계안을 제공해드릴 수 있습니다.
-
-※ 본 안내는 일반적인 정보 제공 목적이며, 실제 세무 상담은 세무사와 별도로 진행하시기 바랍니다.`
     },
 
     async startTransStreaming(lang, msg) {

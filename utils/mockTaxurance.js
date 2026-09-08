@@ -1,21 +1,7 @@
-// 설계사용 자산가 성향 스크리닝 설문 데이터
-// 구두 질문 멘트, 고객 반응 뉘앙스, 성향 유형별 맞춤 화법을 정의한다.
+// taxurance2 화면용 목업 데이터/응답 모음 (mockApi.js와 동일한 패턴)
+// 백엔드가 준비되면 이 파일의 함수들을 실제 axios 호출로 교체하면 됨.
 
-export interface SurveyOption {
-  val: string
-  text: string
-}
-
-export interface SurveyQuestion {
-  title: string
-  options: SurveyOption[]
-}
-
-export type AgeKey = '30' | '40' | '50' | '60' | '70' | '80'
-
-// 상단 "고객 정보"에서 고르는 연령대(filters.age) 표기를 설문 연령대 키로 매핑한다.
-// filters.ageOptions와 1:1로 대응됨 (30~80대 6구간 모두 설문 데이터 보유).
-const FILTER_AGE_TO_SURVEY_AGE: Record<string, AgeKey> = {
+const FILTER_AGE_TO_SURVEY_AGE = {
   '~30대': '30',
   '40대': '40',
   '50대': '50',
@@ -24,11 +10,11 @@ const FILTER_AGE_TO_SURVEY_AGE: Record<string, AgeKey> = {
   '80대~': '80',
 }
 
-export function mapFilterAgeToSurveyAge(filterAge: string): AgeKey | null {
+export function mapFilterAgeToSurveyAge(filterAge) {
   return FILTER_AGE_TO_SURVEY_AGE[filterAge] || null
 }
 
-export const ageOptions: Array<{ value: AgeKey; label: string }> = [
+export const ageOptions = [
   { value: '30', label: '30대' },
   { value: '40', label: '40대' },
   { value: '50', label: '50대' },
@@ -37,7 +23,7 @@ export const ageOptions: Array<{ value: AgeKey; label: string }> = [
   { value: '80', label: '80대+' },
 ]
 
-export const ageQuestions: Record<AgeKey, { q1: SurveyQuestion; q2: SurveyQuestion; q3: SurveyQuestion }> = {
+export const ageQuestions = {
   '30': {
     q1: {
       title: '💬 Q1 구두 질문: "요즘 한창 돈 모으실 때인데, 돈 굴리면서 가장 신경 쓰이는 게 어떤 점이세요?"',
@@ -214,21 +200,15 @@ export const ageQuestions: Record<AgeKey, { q1: SurveyQuestion; q2: SurveyQuesti
   },
 }
 
-export interface SurveyAnswers {
-  q1: string
-  q2: string
-  q3: string
-}
-
 // 3문항 응답(A~D)을 성향 유형 번호(1~4)로 변환한다.
 // A→1(세무 방어형), B→2(캐시플로우 집중형), C→3(부동산 실물형), D→4(승계형)로 매핑한 뒤
 // 3문항 중 가장 많이 나온 유형(다수결)을 채택하고, 동점일 때는 Q3 답변의 유형을 우선한다.
 // 하나라도 미응답이면 null(진단 불가).
-export function getSurveyType(answers: SurveyAnswers | null | undefined): number | null {
+export function getSurveyType(answers) {
   if (!answers || !answers.q1 || !answers.q2 || !answers.q3) return null
 
-  const typeMap: Record<string, number> = { A: 1, B: 2, C: 3, D: 4 }
-  const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0 }
+  const typeMap = { A: 1, B: 2, C: 3, D: 4 }
+  const counts = { 1: 0, 2: 0, 3: 0, 4: 0 }
 
   counts[typeMap[answers.q1]]++
   counts[typeMap[answers.q2]]++
@@ -245,14 +225,7 @@ export function getSurveyType(answers: SurveyAnswers | null | undefined): number
   return winningType
 }
 
-export interface SurveyTypeResult {
-  badge: string
-  typeTitle: string
-  typeDesc: string
-  points: string[]
-}
-
-export const surveyTypeResults: Record<number, SurveyTypeResult> = {
+export const surveyTypeResults = {
   1: {
     badge: 'Type 1',
     typeTitle: '세무 방어형 자산가',
@@ -295,7 +268,7 @@ export const surveyTypeResults: Record<number, SurveyTypeResult> = {
   },
 }
 
-export const scriptDB: Record<number, Record<AgeKey, string[]>> = {
+export const scriptDB = {
   1: {
     '30': [
       '30대 후반부터는 열심히 모으는 것만큼이나 세는 세금을 막는 비과세 틀을 일찍 짜두는 게 실질 수익률을 크게 높입니다. 특히 금융소득이나 건보료 걱정 없이 확정된 가치로 자산을 굳혀두면서, 만약의 순간에는 가족에게 거액의 비과세 안전판을 즉시 넘겨주는 금융 장치를 가장 먼저 바닥에 깔아두셔야 합니다.',
@@ -472,4 +445,38 @@ export const scriptDB: Record<number, Record<AgeKey, string[]>> = {
       '창업주로서 가문에 남길 수 있는 가장 존엄하고 명예로운 마무리는 후대가 세금과 다툼 없이 화목하게 회사를 키워나갈 수 있는 안전판을 완성해두는 것입니다.',
     ],
   },
+}
+
+// /coverage/contents 목업: 백엔드 없어서 관련자료 없음으로 응답
+export function getCoverageContents() {
+  return { succ: false, items: [] }
+}
+
+// /taxurance/guide/make 목업: 선택된 조건에 맞춰 그럴듯한 샘플 화법 텍스트를 생성
+export function getTaxuranceGuide(params) {
+  const { interest, sex, age, considerations } = params
+  const points = (considerations && considerations.length > 0
+    ? considerations
+    : ['기본']
+  )
+    .map((c) => `- **${c}**: 고객님 상황에 맞춰 ${c} 관련 유의사항과 절세 포인트를 함께 안내드립니다.`)
+    .join('\n')
+
+  return `${age} ${sex} 고객님, 안녕하세요. 오늘은 **${interest}** 관련하여 상담을 도와드리겠습니다.
+
+말씀해주신 내용을 바탕으로, 아래와 같은 순서로 안내드리는 것을 추천드립니다.
+
+**1. 현재 상황 점검**
+고객님의 자산 구성과 가족관계를 먼저 확인하여, ${interest} 진행 시 예상되는 세부담과 절차를 안내드립니다.
+
+**2. 중점 안내 항목**
+${points}
+
+**3. 보험 활용 방안**
+종신보험 등 보장성 보험을 활용하면 ${interest} 발생 시 필요한 자금을 미리 준비해둘 수 있어, 급하게 자산을 처분하지 않아도 되는 장점이 있습니다.
+
+**4. 다음 단계**
+정확한 세액 산출을 위해서는 세무 전문가와의 협업이 필요하며, 고객님의 자산 현황 자료를 준비해주시면 보다 구체적인 설계안을 제공해드릴 수 있습니다.
+
+※ 본 안내는 일반적인 정보 제공 목적이며, 실제 세무 상담은 세무사와 별도로 진행하시기 바랍니다.`
 }
