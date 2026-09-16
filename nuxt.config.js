@@ -13,6 +13,12 @@ export default {
     // 보험피터(코칭트랙) 전용 백엔드 주소 - AI Search 백엔드(API_BASE_URL)와는 별개의 서비스
     API_URL: process.env.COACHING_TRACK_API_URL || '',
     DEV_API_URL: process.env.COACHING_TRACK_DEV_API_URL || 'http://localhost:8000',
+    // taxurance3(프롬프트 테스트) 전용 백엔드 주소 - 로컬 개발은 8000, 내부망 배포는 빈 값(같은 origin)
+    // ||는 빈 문자열도 "설정 안 됨"으로 취급해버려서 undefined만 걸러야 함
+    TAXURANCE_API_BASE:
+      process.env.TAXURANCE_API_BASE !== undefined
+        ? process.env.TAXURANCE_API_BASE
+        : 'http://localhost:8003',
   },
   head: {
     title: 'FC AI Search',
