@@ -376,12 +376,9 @@ export default {
     renderMarkdown,
 
     async fetchContents() {
-      // ═══════════════════════════════════════════════
-      return
-      // ═══════════════════════════════════════════════
       try {
         const { items, succ } = await this.$axios.post('/taxurance/contents', {
-          interest: this.filters.interest,
+          interests: [this.filters.interest],
         })
         if (succ) {
           this.toggleRelatedDataMapping(true, items)
@@ -390,6 +387,15 @@ export default {
       } catch (e) {
         console.warn('[fetchContents] 관련자료 조회 실패(백엔드 미연결 등):', e)
       }
+    },
+
+    // 성별은 백엔드 스키마(OpeningReq/GuideReq)에 별도 필드가 없어서, 오프닝 생성 시점의
+    // requirement 자유 텍스트에 합쳐 보낸다. (이후 화법 생성/재생성은 이 오프닝 결과를 그대로
+    // 컨텍스트로 넘겨받으므로 성별 정보도 함께 전달됨)
+    buildOpeningRequirement() {
+      const sexText = this.resultFilters.sex ? `성별: ${this.resultFilters.sex}` : ''
+      const requirement = this.resultFilters.requirement || ''
+      return [sexText, requirement].filter(Boolean).join(', ')
     },
 
     async startStreaming() {
@@ -405,26 +411,16 @@ export default {
       })
       const last = this.messages[this.messages.length - 1]
 
-      // ═══════════════════════════════════════════════
-      await this.$nextTick()
-      this.openingMent = '(오프닝 멘트 생성 실패) 백엔드 서버 연결을 확인해주세요.'
-      this.$set(last, 'content', '(생성 실패) 백엔드 서버 연결을 확인해주세요.')
-      this.$nextTick(() => this.scrollToBottom(false))
-      this.isTyping = false
-      this.clearTicker()
-      return
-      // ═══════════════════════════════════════════════
       try {
         if (this.submitType === 'first') {
           try {
-            const { data: openingData } = await this.$axios.post('/taxurance/generate/opening', {
-              interest: this.resultFilters.interest,
-              sex: this.resultFilters.sex,
-              age_label: this.resultFilters.age,
-              considerations: this.resultFilters.considerations,
-              requirement: this.resultFilters.requirement || '',
+            const openingData = await this.$axios.post('/taxurance/opening/make', {
+              interests: [this.resultFilters.interest],
+              age_tags: [this.resultFilters.age],
+              consider_options: this.resultFilters.considerations,
+              requirement: this.buildOpeningRequirement(),
             })
-            this.openingMent = openingData.opening_ment
+            this.openingMent = openingData.opening
           } catch (e) {
             console.error('[taxurance] 오프닝 멘트 생성 실패:', e)
             this.openingMent = '(오프닝 멘트 생성 실패) 백엔드 서버 연결을 확인해주세요.'
@@ -433,18 +429,38 @@ export default {
           this.resultFilters.prev_speech = ''
         }
 
-        const { data: finalData } = await this.$axios.post('/taxurance/generate/final', {
-          interest: this.resultFilters.interest,
-          sex: this.resultFilters.sex,
-          age_label: this.resultFilters.age,
-          considerations: this.resultFilters.considerations,
-          opening_ment: this.openingMent,
-          prev_speech: this.resultFilters.prev_speech || '',
-          requirement: this.resultFilters.requirement || '',
-        })
-
-        this.$set(last, 'content', finalData.speech)
-        this.$set(last, 'readyTrans', true)
+        // /taxurance/speech/make는 SSE 스트리밍 응답이라 $stream.fetchStream으로 받는다
+        // (startTransStreaming과 동일한 방식)
+        let hasError = false
+        await this.$stream.fetchStream(
+          '/taxurance/speech/make',
+          {
+            interests: [this.resultFilters.interest],
+            age_tags: [this.resultFilters.age],
+            consider_options: this.resultFilters.considerations,
+            opening_result: this.openingMent,
+            prev_speech: this.resultFilters.prev_speech || '',
+            requirement: this.resultFilters.requirement || '',
+          },
+          {
+            onChunk: (chunk) => {
+              this.$set(last, 'content', last.content + chunk)
+              this.$nextTick(() => this.scrollToBottom(false))
+            },
+            onError: (e) => {
+              hasError = true
+              console.error('[taxurance] 화법 생성 실패:', e)
+              if (!last.content) {
+                this.$set(last, 'content', '(생성 실패) 백엔드 서버 연결을 확인해주세요.')
+              }
+            },
+            onFinished: () => {
+              if (!hasError) {
+                this.$set(last, 'readyTrans', true)
+              }
+            },
+          }
+        )
       } catch (e) {
         console.error('[taxurance] 화법 생성 실패:', e)
         this.$set(last, 'content', '(생성 실패) 백엔드 서버 연결을 확인해주세요.')

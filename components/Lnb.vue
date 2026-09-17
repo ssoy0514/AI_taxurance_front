@@ -28,6 +28,14 @@ export default {
           active: true,
         },
         {
+          title: '고객 맞춤형 재무 설계',
+          id: 'SALES_03',
+          path: '/sales/taxurance2',
+          icon: 'icon-compass',
+          items: [],
+          active: true,
+        },
+        {
           title: '간편 언더라이팅',
           id: 'UNDER',
           path: '/sales/under',
