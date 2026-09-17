@@ -389,15 +389,6 @@ export default {
       }
     },
 
-    // 성별은 백엔드 스키마(OpeningReq/GuideReq)에 별도 필드가 없어서, 오프닝 생성 시점의
-    // requirement 자유 텍스트에 합쳐 보낸다. (이후 화법 생성/재생성은 이 오프닝 결과를 그대로
-    // 컨텍스트로 넘겨받으므로 성별 정보도 함께 전달됨)
-    buildOpeningRequirement() {
-      const sexText = this.resultFilters.sex ? `성별: ${this.resultFilters.sex}` : ''
-      const requirement = this.resultFilters.requirement || ''
-      return [sexText, requirement].filter(Boolean).join(', ')
-    },
-
     async startStreaming() {
       this.isTyping = true
       this.startFake()
@@ -415,10 +406,11 @@ export default {
         if (this.submitType === 'first') {
           try {
             const openingData = await this.$axios.post('/taxurance/opening/make', {
+              sex: this.resultFilters.sex,
               interests: [this.resultFilters.interest],
               age_tags: [this.resultFilters.age],
               consider_options: this.resultFilters.considerations,
-              requirement: this.buildOpeningRequirement(),
+              requirement: this.resultFilters.requirement || '',
             })
             this.openingMent = openingData.opening
           } catch (e) {
@@ -435,6 +427,7 @@ export default {
         await this.$stream.fetchStream(
           '/taxurance/speech/make',
           {
+            sex: this.resultFilters.sex,
             interests: [this.resultFilters.interest],
             age_tags: [this.resultFilters.age],
             consider_options: this.resultFilters.considerations,
