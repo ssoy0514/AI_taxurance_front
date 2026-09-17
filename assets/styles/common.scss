@@ -450,6 +450,9 @@ $colorInfo: rgb(55, 154, 230); //#379ae6
 .icon-bible:before {
   @include maskImages('icon-bible.svg', #155dfc);
 }
+.icon-tax:before {
+  @include maskImages('icon-tax.svg', #155dfc);
+}
 .icon-under:before {
   @include maskImages('icon-under.svg', #155dfc);
 }
