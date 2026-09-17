@@ -396,15 +396,9 @@ export default {
       })
       const last = this.messages[this.messages.length - 1]
 
-      // [백엔드 연계] 가드(═══)/fallback return 블록 제거, 아래부터 실제 호출로 전환.
       try {
         if (this.submitType === 'first') {
           try {
-            // [백엔드 연계] /taxurance/generate/opening -> /taxurance/opening/make로 경로 변경.
-            // 파라미터도 interest/age_label/considerations -> interests/age_tags/consider_options
-            // 배열 형태로 바뀌었고, 응답 필드도 opening_ment -> opening으로 바뀜.
-            // sex는 처음엔 스키마에 필드가 없어 requirement 텍스트에 합쳐 보냈었는데(buildOpeningRequirement),
-            // 백엔드에 sex 필드가 추가되어 이제 아래처럼 바로 보냄.
             const openingData = await this.$axios.post('/taxurance/opening/make', {
               sex: this.resultFilters.sex,
               interests: [this.resultFilters.interest],
@@ -420,10 +414,7 @@ export default {
         } else if (this.submitType === 're') {
           this.resultFilters.prev_speech = ''
         }
-
-        // [백엔드 연계] /taxurance/generate/final(단발 POST, 응답이 한 번에 옴) ->
-        // /taxurance/speech/make(SSE 스트리밍)로 변경. $stream.fetchStream으로 받는다
-        // (startTransStreaming과 동일한 방식)
+        
         let hasError = false
         await this.$stream.fetchStream(
           '/taxurance/speech/make',
@@ -449,8 +440,14 @@ export default {
               }
             },
             onFinished: () => {
-              if (!hasError) {
+              if (hasError) return
+              // 스트림이 에러 없이 끝났는데 청크를 하나도 못 받은 경우(빈 응답 등) -
+              // content가 비어있는데 readyTrans만 true가 되면 StepDots(로딩)랑 번역하기 버튼이
+              // 동시에 뜨는 어정쩡한 상태가 되므로, 이 경우엔 실패로 처리한다.
+              if (last.content) {
                 this.$set(last, 'readyTrans', true)
+              } else {
+                this.$set(last, 'content', '(생성 실패) 백엔드 서버 연결을 확인해주세요.')
               }
             },
           }
@@ -570,6 +567,9 @@ export default {
     handleKeyDown(e) {
       if (this.text.trim().length < 1) return
       if (e.key === 'Enter' && e.shiftKey) return
+      // 한글 등 조합형 입력 중 조합을 확정하려고 누른 Enter까지 전송으로 잡히는 걸 막는다
+      // (isComposing이 false로 잡히는 구형 브라우저 대비 keyCode 229도 같이 체크)
+      if (e.key === 'Enter' && (e.isComposing || e.keyCode === 229)) return
       if (e.key === 'Enter') {
         e.preventDefault()
         this.handleClickSend()
