@@ -378,7 +378,9 @@ export default {
     async fetchContents() {
       try {
         const { items, succ } = await this.$axios.post('/taxurance/contents', {
-          interests: [this.filters.interest],
+          interests: [this.resultFilters.interest],
+          age_tags: [this.resultFilters.age],
+          consider_options: this.resultFilters.considerations,
         })
         if (succ) {
           this.toggleRelatedDataMapping(true, items)
