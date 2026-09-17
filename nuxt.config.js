@@ -44,6 +44,7 @@ export default {
   },
   ssr: false, // CSR 모드로 설정
   router: {
+    // [백엔드 연계] auth 미들웨어 다시 켜짐 (이전엔 주석처리 되어 꺼져있었음)
     middleware: ['auth'],
     extendRoutes(routes, resolve) {
       const bridgeRoutes = []
@@ -78,6 +79,7 @@ export default {
   },
   proxy: {
     '/api/': {
+      // [백엔드 연계] target이 API_BASE_URL 단독 -> PROXY_TARGET_URL 우선으로 변경
       // TEMP(Gemini 테스트용): 로컬에서는 API_BASE_URL 자체를 상대경로(/api)로 바꿔서
       // $stream.fetchStream도 이 프록시를 타게 만들었기 때문에(.env.local 참고), 프록시의
       // 실제 타겟은 PROXY_TARGET_URL로 분리. 설정 안 된 환경(dev/qa/prod)은 기존처럼 API_BASE_URL 사용.
