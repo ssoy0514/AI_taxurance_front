@@ -371,8 +371,13 @@ export default {
     // interest(문자열) -> interests(배열)로 파라미터 형태도 백엔드 스키마에 맞게 변경.
     async fetchContents() {
       try {
+        // 화법 생성(오프닝/최종화법) 호출과 동일한 필터 기준(관심분야/연령대/특이사항)을 사용.
+        // sex는 DB 필터링이 아니라 LLM 프롬프트 톤 조정용이라(filter_speechdoc_rows에 sex 파라미터
+        // 자체가 없음) 관련자료 조회엔 넣지 않는다.
         const { items, succ } = await this.$axios.post('/taxurance/contents', {
-          interests: [this.filters.interest],
+          interests: [this.resultFilters.interest],
+          age_tags: [this.resultFilters.age],
+          consider_options: this.resultFilters.considerations,
         })
         if (succ) {
           this.toggleRelatedDataMapping(true, items)
