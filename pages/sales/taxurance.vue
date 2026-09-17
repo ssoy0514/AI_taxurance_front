@@ -245,7 +245,7 @@ export default {
         interest : '상속',
         sex: '남성',
         age: '~30대',
-        considerations: ['기본'],
+        considerations: [],
         requirement: '',
         prev_speech: '',
         typecode: null,
@@ -346,15 +346,7 @@ export default {
     },
 
     'filters.interest'() {
-      this.filters.considerations = ['기본']
-    },
-
-    'filters.considerations'(newVal) {
-      if (newVal.length > 1 && newVal.includes('기본')) {
-        this.filters.considerations = newVal.filter((v) => v !== '기본')
-      } else if (newVal.length === 0) {
-        this.filters.considerations = ['기본']
-      }
+      this.filters.considerations = []
     },
   },
 
@@ -375,6 +367,8 @@ export default {
   methods: {
     renderMarkdown,
 
+    //  실제 백엔드 연결되어 가드(═══)/return 제거하고 실호출로 전환.
+    // interest(문자열) -> interests(배열)로 파라미터 형태도 백엔드 스키마에 맞게 변경.
     async fetchContents() {
       try {
         const { items, succ } = await this.$axios.post('/taxurance/contents', {
@@ -402,9 +396,15 @@ export default {
       })
       const last = this.messages[this.messages.length - 1]
 
+      // [백엔드 연계] 가드(═══)/fallback return 블록 제거, 아래부터 실제 호출로 전환.
       try {
         if (this.submitType === 'first') {
           try {
+            // [백엔드 연계] /taxurance/generate/opening -> /taxurance/opening/make로 경로 변경.
+            // 파라미터도 interest/age_label/considerations -> interests/age_tags/consider_options
+            // 배열 형태로 바뀌었고, 응답 필드도 opening_ment -> opening으로 바뀜.
+            // sex는 처음엔 스키마에 필드가 없어 requirement 텍스트에 합쳐 보냈었는데(buildOpeningRequirement),
+            // 백엔드에 sex 필드가 추가되어 이제 아래처럼 바로 보냄.
             const openingData = await this.$axios.post('/taxurance/opening/make', {
               sex: this.resultFilters.sex,
               interests: [this.resultFilters.interest],
@@ -421,7 +421,8 @@ export default {
           this.resultFilters.prev_speech = ''
         }
 
-        // /taxurance/speech/make는 SSE 스트리밍 응답이라 $stream.fetchStream으로 받는다
+        // [백엔드 연계] /taxurance/generate/final(단발 POST, 응답이 한 번에 옴) ->
+        // /taxurance/speech/make(SSE 스트리밍)로 변경. $stream.fetchStream으로 받는다
         // (startTransStreaming과 동일한 방식)
         let hasError = false
         await this.$stream.fetchStream(
@@ -499,9 +500,7 @@ export default {
     )
     },
 
-    // 자산가유형 진단 팝업 - 열 때마다 항상 설문 첫 문항부터 새로 시작한다.
-    // (typeDiagnosis를 안 지우면, 지난번에 이미 진단해본 뒤 다시 열었을 때
-    // 설문 없이 그 결과가 바로 떠버리는 문제가 있었음)
+
     openTypeModal() {
       if (!this.filters.age) {
         alert('연령대를 먼저 선택해주세요.')
@@ -703,28 +702,28 @@ export default {
                     </label>
                   </div>
                 </div>
-                <div class="wrap-label rd-st1 rd-st1--wrap">
-                  <label v-for="interest in interestOptions" :key="interest">
-                    <input
-                      type="radio"
-                      v-model="filters.interest"
-                      :value="interest"
-                      required
-                    />
-                    <p>{{ interest }}</p>
-                  </label>
+                <div class="interest-header-row">
+                  <div class="wrap-label rd-st1 rd-st1--wrap">
+                    <label v-for="interest in interestOptions" :key="interest">
+                      <input
+                        type="radio"
+                        v-model="filters.interest"
+                        :value="interest"
+                        required
+                      />
+                      <p>{{ interest }}</p>
+                    </label>
+                  </div>
+                  <button type="button" class="btn-type-survey" @click="openTypeModal">
+                     관심분야를 추천해드릴까요?
+                  </button>
                 </div>
               </li>
               <li class="full">
-                <div class="consider-header-row">
-                  <p class="tit">
-                    고객 특이사항
-                    <span class="txt-no-required">(선택)</span>
-                  </p>
-                  <button type="button" class="btn-type-survey" @click="openTypeModal">
-                    선택값을 추천해드릴까요?
-                  </button>
-                </div>
+                <p class="tit">
+                  고객 특이사항
+                  <span class="txt-no-required">(선택)</span>
+                </p>
 
                 <div class="wrap-label chk-st3">
                   <div v-for="(group, gi) in visibleConsiderGroups" :key="gi" class="chk-st3-row">
@@ -905,19 +904,13 @@ export default {
                 </ul>
               </div>
 
-              <!-- 오프닝 멘트: 최종화법과 별도 카드로 표시 -->
-              <div class="msg speech" v-if="hasResult && openingMent">
-                <div class="speech-header">
-                  <p class="tit">
-                    <i class="icon-s icon-star"></i>오프닝 멘트
-                  </p>
-                </div>
-                <div class="speech-body">
-                  <div
-                    class="markdown-body"
-                    v-html="renderMarkdown(openingMent)"
-                  ></div>
-                </div>
+              <!-- 오프닝 멘트: 최종화법 카드(파란 헤더바)보다 단순한, 그러나 같은 카드 톤(둥근 모서리/옅은 그림자)의 작은 카드 -->
+              <div class="opening-ment" v-if="hasResult && openingMent">
+                <p class="opening-ment-tit">오프닝 멘트</p>
+                <div
+                  class="markdown-body"
+                  v-html="renderMarkdown(openingMent)"
+                ></div>
               </div>
 
               <!-- 실제 대화 메시지 목록 (messages 배열을 순회) -->
@@ -1306,13 +1299,47 @@ export default {
 @media (hover: hover) {
 }
 
-/* 고객 특이사항 라벨 + "선택값을 못 고르시겠나요?" 버튼 한 줄 배치 */
-.consider-header-row {
+/* 오프닝 멘트 - 최종화법 카드(파란 헤더바+큰 그림자)보다 단순한 작은 카드.
+   배경은 인디고 톤 유지, 라벨 텍스트 색상만 "AI 제안 화법" 헤더 타이틀과 동일하게 맞춤 */
+.opening-ment {
+  margin: rem(12) 0;
+  padding: rem(20) rem(24);
+  border: 1px solid #c7d2fe;
+  border-radius: 16px;
+  background: #eef1ff;
+  box-shadow: 0px 8px 13px -2px rgba(0, 0, 0, 0.06),
+    0px 3px 5px -3px rgba(0, 0, 0, 0.06);
+  // github-markdown-css(전역)가 .markdown-body에 background-color: #fff를 강제하므로,
+  // 이 박스 안에서만큼은 투명하게 덮어써서 인디고 배경이 그대로 보이게 함
+  .markdown-body {
+    background: transparent;
+  }
+}
+.opening-ment-tit {
+  margin-bottom: 10px;
+  color: #1c398e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* 관심분야 라디오 + "선택값을 추천해드릴까요?" 버튼 한 줄 배치. 폭이 좁아지면
+   버튼이 관심분야 라디오 아래(왼쪽 정렬)로 자연스럽게 줄바꿈됨 */
+.interest-header-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  flex-wrap: wrap;
   gap: rem(12);
   width: 100%;
+  > .wrap-label {
+    // grow는 0으로 둬서 관심분야 라디오 그룹이 남는 공간을 채우려고 늘어나지 않게(고정 크기 유지).
+    // shrink는 허용하고, flex item의 기본 min-width:auto(내용 전체 너비가 최소 크기로 강제되는 것)만
+    // 0으로 풀어줘서, 진짜 폭이 부족할 때만 줄바꿈(2줄)되도록 함.
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  > .btn-type-survey {
+    flex-shrink: 0;
+  }
 }
 .btn-type-survey {
   flex-shrink: 0;

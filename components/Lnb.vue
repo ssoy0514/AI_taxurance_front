@@ -27,8 +27,9 @@ export default {
           items: [],
           active: true,
         },
+        // [백엔드 연계] 좌측 메뉴에 신규 추가된 항목 - 경로가 taxurance가 아니라 taxurance2를 가리킴
         {
-          title: '고객 맞춤형 재무 설계',
+          title: 'AI 택슈어런스',
           id: 'SALES_03',
           path: '/sales/taxurance2',
           icon: 'icon-compass',
