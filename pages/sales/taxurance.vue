@@ -223,6 +223,7 @@ export default {
       genderOptions: ['여성', '남성'],
       ageOptions: ['~30대','40대', '50대', '60대', '70대', '80대~'],
       optionLetters: ['A', 'B', 'C', 'D'],
+      transOptions: ['영어', '중국어', '태국어', '베트남어', '러시아어', '몽골어'],
 
       // considerOptions, computed(visibleConsiderGroups)가 결정
       considerCategories: [
@@ -1089,7 +1090,7 @@ export default {
   label {
     p {
       min-width: 0;
-      padding: rem(8) rem(20);
+      padding: rem(8) rem(11);
       font-size: 13px;
       white-space: nowrap;
     }
