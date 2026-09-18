@@ -65,7 +65,7 @@ export default {
       STEP_MS: 3000,
       ticker: null,
 
-      openingMent: '', // 오프닝 멘트(llm1) 결과 저장해두기
+      openingMsg: { content: '', isTrans: false, transText: '' }, // 오프닝 멘트(llm1) 결과 + 번역 상태
     }
   },
   computed: {
@@ -208,10 +208,10 @@ export default {
               consider_options: this.resultFilters.considerations,
               requirement: this.resultFilters.requirement || '',
             })
-            this.openingMent = openingData.opening
+            this.openingMsg.content = openingData.opening
           } catch (e) {
             console.error('[taxurance] 오프닝 멘트 생성 실패:', e)
-            this.openingMent = ''
+            this.openingMsg.content = ''
             this.$set(last, 'content', '(오프닝 멘트 생성 실패) 백엔드 서버 연결을 확인해주세요.')
             return
           }
@@ -227,7 +227,7 @@ export default {
             interests: [this.resultFilters.interest],
             age_tags: [this.resultFilters.age],
             consider_options: this.resultFilters.considerations,
-            opening_result: this.openingMent,
+            opening_result: this.openingMsg.content,
             prev_speech: this.resultFilters.prev_speech || '',
             requirement: this.resultFilters.requirement || '',
           },
@@ -353,6 +353,7 @@ export default {
       if (this.isFormValid) {
         this.messages = []
         this.relatedData = []
+        this.openingMsg = { content: '', isTrans: false, transText: '' }
         this.resultFilters = {
         ...this.filters,
         considerations: [...this.filters.considerations],
@@ -710,12 +711,43 @@ export default {
               </div>
 
               <!-- 오프닝 멘트: 최종화법 카드(파란 헤더바)보다 단순한, 그러나 같은 카드 톤(둥근 모서리/옅은 그림자)의 작은 카드 -->
-              <div class="opening-ment" v-if="hasResult && openingMent">
-                <p class="opening-ment-tit">오프닝 멘트</p>
-                <div
-                  class="markdown-body"
-                  v-html="renderMarkdown(openingMent)"
-                ></div>
+              <div class="opening-ment" v-if="hasResult && openingMsg.content">
+                <div class="opening-ment-main">
+                  <p class="opening-ment-tit">오프닝 멘트</p>
+                  <div
+                    class="markdown-body"
+                    v-html="renderMarkdown(openingMsg.content)"
+                  ></div>
+                </div>
+                <div class="opening-ment-footer">
+                  <div class="trans-header">
+                    <p class="tit">
+                      <i class="icon-s icon-trans"></i>번역하기
+                    </p>
+                    <div>
+                      <button
+                        v-for="(trans, idx) in transOptions"
+                        :key="idx"
+                        class="btn-s btn-gray"
+                        @click="startTransStreaming(trans, openingMsg)"
+                      >
+                        {{ trans }}
+                      </button>
+                    </div>
+                  </div>
+                  <div class="trans-body" v-if="openingMsg.isTrans">
+                    <StepDots
+                      v-if="!openingMsg.transText"
+                      :step="currentStep"
+                      :totalStep="totalStep"
+                      :label="stepTexts[currentStep]"
+                    />
+                    <div
+                      class="markdown-body"
+                      v-html="renderMarkdown(openingMsg.transText)"
+                    ></div>
+                  </div>
+                </div>
               </div>
 
               <!-- 실제 대화 메시지 목록 (messages 배열을 순회) -->
@@ -1105,26 +1137,66 @@ export default {
 }
 
 /* 오프닝 멘트 - 최종화법 카드(파란 헤더바+큰 그림자)보다 단순한 작은 카드.
-   배경은 인디고 톤 유지, 라벨 텍스트 색상만 "AI 제안 화법" 헤더 타이틀과 동일하게 맞춤 */
+   본문/번역하기 영역은 선(구분선) 대신 배경색 차이로만 구분, 색은 인디고 계열로 통일 */
 .opening-ment {
   margin: rem(12) 0;
-  padding: rem(20) rem(24);
-  border: 1px solid #c7d2fe;
+  border: 0.6px solid #dbeafe;
   border-radius: 16px;
   background: #eef1ff;
   box-shadow: 0px 8px 13px -2px rgba(0, 0, 0, 0.06),
     0px 3px 5px -3px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
   // github-markdown-css(전역)가 .markdown-body에 background-color: #fff를 강제하므로,
   // 이 박스 안에서만큼은 투명하게 덮어써서 인디고 배경이 그대로 보이게 함
   .markdown-body {
     background: transparent;
   }
 }
+.opening-ment-main {
+  padding: rem(20) rem(24);
+  background-color: #eef1ff;
+}
 .opening-ment-tit {
   margin-bottom: 10px;
-  color: #1c398e;
+  color: #4338ca;
   font-size: 13px;
   font-weight: 700;
+}
+.opening-ment-footer {
+  padding: rem(16) rem(24);
+  background-color: #eef1ff;
+  .trans-header {
+    @include flexbox(space-between, center);
+    gap: rem(10);
+    .tit {
+      @include flexbox(flex-start, center);
+      gap: rem(8);
+      flex-shrink: 0;
+      color: #62748e;
+      font-size: 14px;
+      font-weight: 600;
+      i:before {
+        background-color: #62748e;
+      }
+    }
+    > div {
+      @include flexbox(flex-end, center);
+      flex-wrap: wrap;
+      gap: 8px;
+      .btn-s {
+        border: none;
+        background-color: #f5f7ff;
+        color: #646464;
+      }
+    }
+  }
+  .trans-body {
+    margin-top: rem(12);
+    padding: rem(12);
+    border-radius: 12px;
+    background-color: #f5f7ff;
+    white-space: pre-line;
+  }
 }
 
 /* 관심분야 라디오 + "선택값을 추천해드릴까요?" 버튼 한 줄 배치. 폭이 좁아지면
