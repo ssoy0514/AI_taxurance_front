@@ -1,251 +1,914 @@
-<script lang="ts">
-export default {
-  name: 'CoachingTrack',
-  layout: 'blank',
-}
-</script>
+<script>
+import { renderMarkdown } from '@/utils/markdown'
 
-<script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
-import { riders as staticRiders, READY_PRODUCTS } from '~/utils/coachingTrackData'
-import { useToast } from '~/composables/useToast'
-import { useScriptGeneration } from '~/composables/useScriptGeneration'
-import { useRiderGroups } from '~/composables/useRiderGroups'
-import type { Profile, StatChartItem } from '~/utils/coachingTrackTypes'
-import type { Rider } from '~/utils/coachingTrackData'
+const CATEGORY_ORDER = [
+  '암진단', '암치료', '순환계진단', '순환계치료',
+  '수술', '입원', '입원/수술', '시니어', '재해', '사망/장해', '기타',
+]
 
-// ── Toast ─────────────────────────────────────────────────────────────────
-const { toasts, error } = useToast()
-
-// ── API 베이스 URL (클라이언트에서만 window 접근) ──────────────────────────
-const apiBase = ref('')
-onMounted(async () => {
-  apiBase.value = window.location.hostname === 'localhost'
-    ? (process.env.DEV_API_URL ?? 'http://localhost:8000')
-    : (process.env.API_URL ?? '')
-
-  try {
-    const [ridersRes, productsRes] = await Promise.all([
-      fetch(`${apiBase.value}/api/riders`),   // backend/src/router/router_fc_script.py
-      fetch(`${apiBase.value}/api/products`),
-    ])
-    if (ridersRes.ok) riders.value = await ridersRes.json()
-    if (productsRes.ok) apiProducts.value = await productsRes.json()
-  } catch {
-    // fallback: utils/coachingTrackData.ts의 staticRiders + READY_PRODUCTS 유지
-  }
-})
-
-// ── 앱 상태 ───────────────────────────────────────────────────────────────
-const currentStep = ref<'selection' | 'result' | 'coming-soon'>('selection') // 초기값 설정
-const returningToEdit = ref(false)
-const profile = ref<Profile>({ age: '30대', gender: '남성', notes: '' })
-const selectedRiders = ref<string[]>([])
-const riders = ref<Rider[]>(staticRiders) // 정적데이터 서빙
-const selectedProduct = ref('가족대표건강보험')
-const apiProducts = ref<string[]>([])
-
-// ── 상품/라이더 computed ───────────────────────────────────────────────────
-const availableProducts = computed(() => {
-  const seen = new Set<string>()
-  const list: string[] = []
-  for (const r of riders.value) {
-    const p = r.product ?? '가족대표건강보험'
-    if (!seen.has(p)) { seen.add(p); list.push(p) }
-  }
-  return list
-})
-
-const productRiders = computed(() =>
-  riders.value.filter((r) => (r.product ?? '가족대표건강보험') === selectedProduct.value)
-)
-
-const isCurrentProductReady = computed(() => {
-  if (apiProducts.value.length > 0) return apiProducts.value.includes(selectedProduct.value)
-  return READY_PRODUCTS.includes(selectedProduct.value)
-})
-
-const selectedDataFull = computed(() =>
-  productRiders.value.filter((r) => selectedRiders.value.includes(r.id))
-)
-
-// ── ProfileForm 상태 ───────────────────────────────────────────────────────
-const ageOptions = ['20대', '30대', '40대', '50대', '60대+']
-const genderOptions = ['남성', '여성']
-const openField = ref<'age' | 'gender' | null>(null)
-
-function updateProfile(field: keyof Profile, value: string) {
-  profile.value = { ...profile.value, [field]: value }
-  openField.value = null
-}
-
-function toggleField(field: 'age' | 'gender') {
-  openField.value = openField.value === field ? null : field
-}
-
-function closeAllDropdowns() {
-  openField.value = null
-}
-
-// ── RiderGrid 상태 ─────────────────────────────────────────────────────────
-const activeCategory = ref('전체')
-const showSelectedOnly = ref(false)
-const { groupedRiders } = useRiderGroups(productRiders)
-
-watch(selectedProduct, () => {
-  selectedRiders.value = []
-  activeCategory.value = '전체'
-  showSelectedOnly.value = false
-})
-
-watch(returningToEdit, (val) => {
-  if (val && selectedRiders.value.length > 0) showSelectedOnly.value = true
-  if (val) activeCategory.value = '전체'
-})
-
-watch(showSelectedOnly, (val) => {
-  if (!val) activeCategory.value = '전체'
-})
-
-watch(() => selectedRiders.value.length, (len) => {
-  if (len === 0) showSelectedOnly.value = false
-})
-
-const filteredRiders = computed(() => {
-  let pool: Rider[] = activeCategory.value === '전체'
-    ? [...productRiders.value]
-    : (groupedRiders.value.find(([cat]) => cat === activeCategory.value)?.[1] ?? [])
-  if (showSelectedOnly.value) {
-    pool = pool.filter((r) => selectedRiders.value.includes(r.id))
-  }
-  return pool
-})
-
-function selectCategory(cat: string) {
-  activeCategory.value = cat
-  showSelectedOnly.value = false
-}
-
-function toggleSelectedOnly() {
-  showSelectedOnly.value = !showSelectedOnly.value
-  if (showSelectedOnly.value) activeCategory.value = '전체'
-}
-
-// ── ResultView 상태 ────────────────────────────────────────────────────────
-const expandedClaimNames = ref<string[]>([])
-const activeTab = ref<'script' | 'points'>('script')
-const showScriptsPanel = ref(false)
-const expandedDescNames = ref<string[]>([])
-
-const qnaByRider = computed(() => {
-  const groups: { rider: string; items: any[] }[] = []
-  for (const item of generatedScript.value?.qna ?? []) {
-    const riderName = item.rider ?? '기타'
-    const existing = groups.find((g) => g.rider === riderName)
-    if (existing) existing.items.push(item)
-    else groups.push({ rider: riderName, items: [item] })
-  }
-  return groups
-})
-
-function toggleClaim(name: string) {
-  if (expandedClaimNames.value.includes(name)) {
-    expandedClaimNames.value = expandedClaimNames.value.filter((n) => n !== name)
-  } else {
-    expandedClaimNames.value.push(name)
-  }
-}
-
-function toggleDesc(name: string) {
-  if (expandedDescNames.value.includes(name)) {
-    expandedDescNames.value = expandedDescNames.value.filter((n) => n !== name)
-  } else {
-    expandedDescNames.value.push(name)
-  }
-}
-
-function formatDesc(text: string) {
-  return text.replace(/\n(?![□※])/g, ' ')
-}
+const RIDER_BATCH_SIZE = 10
+// 결과 화면 화법 카드: 처음 9개, 더보기마다 9개씩 (묶음 3개 × 동시 3요청 = 한 번에 만들어지는 양)
+const SCRIPT_BATCH_SIZE = 9
+// 화법 요청 1번에 보낼 특약 수 (백엔드가 3개씩 묶어 동시 3개로 LLM 호출 → 9개가 한 번에 응답)
+const SCRIPT_PAGE_SIZE = SCRIPT_BATCH_SIZE
+const SUMMARY_VISIBLE_RIDERS = 3
 
 const BAR_COLORS = ['#2563eb', '#0891b2', '#6366f1', '#0d9488', '#7c3aed', '#1d4ed8']
 const COMPARISON_COLORS = ['#2563eb', '#8b5cf6']
 
-function maxVal(chartData: StatChartItem[]) {
-  return Math.max(...chartData.map((d) => d.value), 1)
+function toggleItem(list, item) {
+  return list.includes(item) ? list.filter((v) => v !== item) : [...list, item]
 }
 
-function barWidth(item: StatChartItem, chartData: StatChartItem[]) {
-  return ((item.value / maxVal(chartData)) * 100).toFixed(1) + '%'
+function splitRiderName(name) {
+  const m = name.match(/^(.*?)\s*\(([^()]*)\)\s*$/)
+  if (!m || !m[1]) return { main: name, sub: '' }
+  return { main: m[1], sub: m[2].split(',').map((x) => x.trim()).filter(Boolean).join(', ') }
 }
 
-function barColor(index: number) {
-  return BAR_COLORS[index % BAR_COLORS.length]
-}
+export default {
+  name: 'CoachingTrack',
 
-function formatNumber(value: number): string {
-  return value.toLocaleString('ko-KR')
-}
+  data() {
+    return {
+      isComingSoon: false,
+      returningToEdit: false,
 
-// ── ResultSidebar 상태 ─────────────────────────────────────────────────────
-const sidebarSearchTerm = ref('')
+      riders: [],
+      apiProducts: [],
+      selectedProduct: '',
+      isPresetting: false,
+      filters: { age: '30대', gender: '남성', notes: '' },
+      ageOptions: ['20대', '30대', '40대', '50대', '60대+'],
+      genderOptions: ['남성', '여성'],
+      ageSelectId: 'profile-age-select',
+      openDropdown: null,
+      dropdownActiveIndex: -1,
+      selectedRiders: [],
+      activeCategory: '전체',
+      showSelectedOnly: false,
+      categoryExpanded: false,
+      categoryOverflow: false,
+      riderGridHasThreeColumns: false,
+      visibleRiderLimit: RIDER_BATCH_SIZE,
 
-const filteredGroupedRiders = computed(() =>
-  groupedRiders.value
-    .map(([cat, items]) => [
-      cat,
-      items.filter((i) => i.name.toLowerCase().includes(sidebarSearchTerm.value.toLowerCase())),
-    ] as [string, Rider[]])
-    .filter(([, items]) => items.length > 0)
-)
+      productCodeByName: {},
+      productNameByJar: {},
+      riderIdByCode: {},
 
-// ── 화법 생성 ──────────────────────────────────────────────────────────────
-const { isGenerating, generatedScript, generate } = useScriptGeneration(apiBase, selectedDataFull, profile)
+      isGenerating: false,
+      // 화법 전체 건수 (요청한 특약 수, 생성 중엔 고정 · 끝나면 실제 받은 수)
+      scriptTotalCount: 0,
+      // 화법 페이지(9개씩). scriptPages[i] 가 undefined 면 아직 생성 중, 배열이면 끝남(실패면 빈 배열)
+      scriptPageCount: 0,
+      scriptPages: [],
+      // 화면에 펼친 페이지 수
+      scriptRevealedPages: 1,
+      generatedScript: null,
+      resultRiders: [],
+      resultFilters: { age: '30대', gender: '남성', notes: '' },
+      resultConditionKey: '',
+      activeTab: 'script',
+      summaryExpanded: false,
+      expandedScriptNames: [],
+      expandedDescNames: [],
+      expandedClaimNames: [],
 
-// ── 액션 ──────────────────────────────────────────────────────────────────
-function toggleRider(id: string) {
-  if (selectedRiders.value.includes(id)) {
-    selectedRiders.value = selectedRiders.value.filter((r) => r !== id)
-  } else {
-    selectedRiders.value.push(id)
-  }
-}
+      sidebarSearchTerm: '',
+      sidebarComboboxOpen: false,
+      sidebarActiveIndex: -1,
+      sidebarComposing: false,
+      sidebarListboxId: 'sidebar-rider-search-listbox',
 
-function removeRider(id: string) {
-  selectedRiders.value = selectedRiders.value.filter((r) => r !== id)
-}
+      toasts: [],
 
-function resetAndGoBack() {
-  selectedRiders.value = []
-  generatedScript.value = null
-  currentStep.value = 'selection'
-  activeCategory.value = '전체'
-  showSelectedOnly.value = false
-}
+      COMPARISON_COLORS,
+    }
+  },
 
-async function generateSalesTalk() {
-  if (selectedRiders.value.length === 0) {
-    error('특약을 하나 이상 선택해 주세요.')
-    return
-  }
-  if (!isCurrentProductReady.value) {
-    currentStep.value = 'coming-soon'
-    return
-  }
-  currentStep.value = 'result'
-  returningToEdit.value = false
-  // 백엔드 연결 여부와 관계없이 결과 화면(디자인 작업용)으로 진입한 뒤,
-  // useScriptGeneration이 실패 시 샘플 데이터로 채워주므로 여기서 다시
-  // 'selection'으로 되돌리지 않습니다.
-  await generate()
+  computed: {
+    currentMode() {
+      return this.$route.query.mode || 'list'
+    },
+    currentStep() {
+      if (this.isComingSoon) return 'coming-soon'
+      return this.currentMode === 'view' ? 'result' : 'selection'
+    },
+
+    availableProducts() {
+      return this.apiProducts
+    },
+    productRiders() {
+      return this.riders.filter((r) => r.product === this.selectedProduct)
+    },
+    isCurrentProductReady() {
+      return this.apiProducts.includes(this.selectedProduct)
+    },
+    selectedDataFull() {
+      return this.productRiders.filter((r) => this.selectedRiders.includes(r.id))
+    },
+
+    profileSummary() {
+      const { age, gender } = this.filters
+      return age && gender ? `${age} ${gender}` : ''
+    },
+
+    groupedRiders() {
+      const groups = {}
+      this.productRiders.forEach((rider) => {
+        if (!rider.category) return
+        if (!groups[rider.category]) groups[rider.category] = []
+        groups[rider.category].push(rider)
+      })
+      const rank = (cat) => {
+        const i = CATEGORY_ORDER.indexOf(cat)
+        return i === -1 ? CATEGORY_ORDER.length : i
+      }
+      return Object.keys(groups)
+        .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+        .map((cat) => [cat, groups[cat]])
+    },
+    filteredRiders() {
+      const pool = this.activeCategory === '전체'
+        ? this.productRiders
+        : (this.groupedRiders.find(([cat]) => cat === this.activeCategory)?.[1] ?? [])
+      return this.showSelectedOnly ? pool.filter((r) => this.selectedRiders.includes(r.id)) : pool
+    },
+    visibleRiders() {
+      return this.riderGridHasThreeColumns
+        ? this.filteredRiders
+        : this.filteredRiders.slice(0, this.visibleRiderLimit)
+    },
+    remainingRiderCount() {
+      return Math.max(0, this.filteredRiders.length - this.visibleRiders.length)
+    },
+    // 첫 페이지(9개) 응답이 왔는지 → 오면 9개를 한꺼번에 표시
+    firstScriptPageReady() {
+      return Array.isArray(this.scriptPages[0])
+    },
+    // 펼친 페이지의 화법만
+    visibleRiderScripts() {
+      return this.scriptPages.slice(0, this.scriptRevealedPages).flatMap((page) => page ?? [])
+    },
+    // 아직 안 펼친 페이지가 있는지 → 더보기 영역 표시
+    hasMoreScriptPages() {
+      return this.scriptRevealedPages < this.scriptPageCount
+    },
+    // 다음 페이지 응답이 왔는지 → 왔으면 "더보기", 아니면 로딩
+    isNextScriptPageReady() {
+      return Array.isArray(this.scriptPages[this.scriptRevealedPages])
+    },
+    showRiderLoadMore() {
+      return !this.riderGridHasThreeColumns && this.filteredRiders.length > RIDER_BATCH_SIZE
+    },
+    selectionStatusText() {
+      const count = this.selectedRiders.length
+      return count === 0 ? '선택한 특약 없음' : `선택한 특약 ${count}개`
+    },
+
+    summaryRiders() {
+      return this.selectedDataFull.map((r, i) => ({ id: r.id, no: i + 1, ...splitRiderName(r.name) }))
+    },
+    summaryHiddenCount() {
+      return Math.max(0, this.summaryRiders.length - SUMMARY_VISIBLE_RIDERS)
+    },
+    summaryReturnLabel() {
+      return `${this.filters.age} ${this.filters.gender}, 고객 정보와 특약 다시 선택하기`
+    },
+
+    currentConditionKey() {
+      return JSON.stringify({
+        product: this.selectedProduct,
+        filters: this.filters,
+        riders: [...this.selectedRiders].sort(),
+      })
+    },
+    resultNeedsUpdate() {
+      return Boolean(this.resultConditionKey) && this.resultConditionKey !== this.currentConditionKey
+    },
+
+
+    qnaByRider() {
+      const groups = new Map()
+      for (const item of this.generatedScript?.qna ?? []) {
+        const rider = item.rider ?? '기타'
+        if (!groups.has(rider)) groups.set(rider, { rider, items: [] })
+        groups.get(rider).items.push(item)
+      }
+      return [...groups.values()]
+    },
+    riderScriptNames() {
+      return this.generatedScript?.riderScripts.map((s) => s.name) ?? []
+    },
+
+    sidebarCandidateRiders() {
+      const query = this.sidebarSearchTerm.trim().toLocaleLowerCase('ko-KR')
+      return this.productRiders.filter((rider) => {
+        if (this.selectedRiders.includes(rider.id)) return false
+        return !query || rider.name.toLocaleLowerCase('ko-KR').includes(query)
+      })
+    },
+    sidebarActiveOptionId() {
+      const rider = this.sidebarCandidateRiders[this.sidebarActiveIndex]
+      return rider ? this.sidebarOptionId(rider) : undefined
+    },
+    sidebarSearchStatus() {
+      if (!this.sidebarComboboxOpen) return ''
+      const count = this.sidebarCandidateRiders.length
+      if (count === 0) return '일치하는 특약이 없습니다.'
+      return this.sidebarSearchTerm.trim() ? `검색 결과 ${count}개` : `추가할 수 있는 특약 ${count}개`
+    },
+  },
+
+  watch: {
+    currentMode(mode, prevMode) {
+      if (mode === 'view') this.isComingSoon = false
+      else if (prevMode === 'view') this.returningToEdit = true
+    },
+    selectedProduct() {
+      this.selectedRiders = []
+      this.activeCategory = '전체'
+      this.showSelectedOnly = false
+      this.visibleRiderLimit = RIDER_BATCH_SIZE
+      this.sidebarSearchTerm = ''
+      this.closeSidebarCombobox()
+      if (!this.isPresetting) this.fetchRiders()
+    },
+    activeCategory() {
+      this.visibleRiderLimit = RIDER_BATCH_SIZE
+    },
+    showSelectedOnly(on) {
+      this.visibleRiderLimit = RIDER_BATCH_SIZE
+      if (on) this.activeCategory = '전체'
+    },
+    'selectedRiders.length'(count) {
+      if (count === 0) this.showSelectedOnly = false
+    },
+    returningToEdit(on) {
+      if (!on) return
+      this.activeCategory = '전체'
+      if (this.selectedRiders.length > 0) this.showSelectedOnly = true
+    },
+    currentStep(step) {
+      this.disconnectObservers()
+      if (step !== 'selection') {
+        this.riderGridHasThreeColumns = false
+        return
+      }
+      this.$nextTick(this.observeSelectionLayout)
+    },
+    'groupedRiders.length'() {
+      this.$nextTick(this.measureCategoryOverflow)
+    },
+    riderScriptNames(names) {
+      const available = new Set(names)
+      this.expandedScriptNames = this.expandedScriptNames.filter((n) => available.has(n))
+      this.expandedDescNames = this.expandedDescNames.filter((n) => available.has(n))
+    },
+    sidebarCandidateRiders() {
+      if (this.sidebarComboboxOpen) this.syncSidebarActiveIndex(this.sidebarActiveIndex)
+    },
+  },
+
+  created() {
+    if (this.$route.query.mode === 'view') {
+      this.$router.replace({ query: { ...this.$route.query, mode: 'list' } })
+    }
+    this.riderGridRO = null
+    this.categoryRO = null
+    this.toastCounter = 0
+  },
+
+  async mounted() {
+    // TODO(임시·커밋 금지): 사랑온 브릿지 진입 URL 확인용 (모바일이라 콘솔 대신 토스트)
+    {
+      const { presetKey: pk, sarangOnDataKey: sk } = this.$route.query
+      const k = pk || sk
+      this.showToast(
+        `[진입 URL]\n${window.location.href}\n\n[읽은 키] ${k ? `${String(k).length}자 ${String(k).slice(0, 10)}…` : '없음'}\n[쿼리 이름] ${Object.keys(this.$route.query).join(', ') || '없음'}`,
+        'debug',
+        30000
+      )
+    }
+    this.$nextTick(this.observeSelectionLayout)
+    document.addEventListener('pointerdown', this.handleSidebarPointerDown)
+    await this.fetchProductCodes()
+    const { presetKey, sarangOnDataKey } = this.$route.query
+    const key = presetKey || sarangOnDataKey
+    if (key) await this.applyPreset(String(key))
+  },
+
+  beforeDestroy() {
+    this.disconnectObservers()
+    document.removeEventListener('pointerdown', this.handleSidebarPointerDown)
+  },
+
+  methods: {
+    showToast(message, type = 'info', duration = 4000) {
+      const id = ++this.toastCounter
+      this.toasts.push({ id, message, type })
+      setTimeout(() => {
+        this.toasts = this.toasts.filter((t) => t.id !== id)
+      }, duration)
+    },
+
+    async fetchProductCodes() {
+      try {
+        const { items } = await this.$axios.get('/coaching/map/product')
+        if (Array.isArray(items)) {
+          // 앱 상품 하나가 지심검 판매버전 여러 개에 걸치면 최근 버전 이름을 쓴다
+          const pdNmByJar = {}
+          for (const item of items) {
+            const name = item.pd_nm || item.jar_nm
+            if (!pdNmByJar[item.jar_code] || name > pdNmByJar[item.jar_code]) pdNmByJar[item.jar_code] = name
+          }
+          this.productNameByJar = pdNmByJar
+          this.productCodeByName = {}
+          for (const [jarCode, name] of Object.entries(pdNmByJar)) {
+            if (!this.productCodeByName[name]) this.productCodeByName[name] = jarCode
+          }
+          this.apiProducts = Object.keys(this.productCodeByName)
+          if (this.apiProducts.length === 0) {
+            this.showToast('코칭트랙에 등록된 상품이 없습니다.', 'error', 5000)
+            return
+          }
+          if (!this.apiProducts.includes(this.selectedProduct)) {
+            this.isPresetting = true
+            this.selectedProduct = this.apiProducts[0]
+            await this.$nextTick()
+            this.isPresetting = false
+          }
+        }
+        await this.fetchRiders()
+      } catch {
+        this.showToast('코칭트랙 상품 정보를 불러오지 못했습니다.', 'error', 5000)
+      }
+    },
+    async fetchRiders() {
+      const jarCode = this.productCodeByName[this.selectedProduct]
+      try {
+        if (!jarCode) throw new Error('상품코드 없음')
+        const { items } = await this.$axios.get(`/coaching/map/rider/${jarCode}`)
+        if (!Array.isArray(items) || items.length === 0) throw new Error('특약 매핑 없음')
+        const now = new Date()
+        const today = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+        const onSale = (x) => (!x.from_date || x.from_date <= today) && (!x.to_date || today <= x.to_date)
+        const byCode = new Map()
+        for (const item of items) {
+          const prev = byCode.get(item.jar_rd_code)
+          const better = !prev
+            || (onSale(item) && !onSale(prev))
+            || (onSale(item) === onSale(prev) && (item.from_date || '') > (prev.from_date || ''))
+          if (better) byCode.set(item.jar_rd_code, item)
+        }
+        const byAcsName = new Map()
+        for (const item of byCode.values()) {
+          const name = item.pd_rd_nm || item.jar_rd_nm
+          const group = byAcsName.get(name)
+          if (group) {
+            group.codes.push(item.jar_rd_code)
+            continue
+          }
+          byAcsName.set(name, {
+            id: item.jar_rd_code,
+            codes: [item.jar_rd_code],
+            product: this.selectedProduct,
+            name,
+            category: item.category,
+            description: '',
+          })
+        }
+        this.riders = [...byAcsName.values()]
+        this.riderIdByCode = Object.fromEntries(this.riders.flatMap((r) => r.codes.map((code) => [code, r.id])))
+      } catch {
+        this.riders = []
+        this.riderIdByCode = {}
+        if (jarCode) this.showToast('특약 정보를 불러오지 못했습니다.', 'error', 5000)
+      }
+    },
+    async applyPreset(presetKey) {
+      try {
+        const res = await this.$axios.get(`/coaching/preset/${encodeURIComponent(presetKey)}`, {
+          validateStatus: (status) => (status >= 200 && status < 300) || status === 400 || status === 404,
+        })
+        if (res.status_code === 404) {
+          this.showToast(res.detail || '가입설계 정보가 없거나 만료되었습니다.', 'error', 5000)
+          return
+        }
+        if (res.status_code === 400) {
+          this.showToast('가입설계 정보가 올바르지 않습니다. 사랑온에서 다시 진입해 주세요.', 'error', 5000)
+          return
+        }
+
+        const product = this.productNameByJar[res.jar_code]
+        if (!product) {
+          this.showToast(`코칭트랙에 없는 상품입니다: ${res.products?.[0]?.pd_nm || res.jar_code}`, 'error', 5000)
+          return
+        }
+        if (product !== this.selectedProduct) {
+          this.isPresetting = true
+          this.selectedProduct = product
+          await this.$nextTick()
+          await this.fetchRiders()
+          this.isPresetting = false
+        }
+
+        const available = new Set(this.productRiders.map((r) => r.id))
+        const toId = (code) => this.riderIdByCode[code] ?? (available.has(code) ? code : undefined)
+        const presetCodes = (res.riders ?? []).map((r) => r.jar_rd_code)
+        const ids = presetCodes.map(toId).filter((id) => id && available.has(id))
+        this.selectedRiders = [...new Set(ids)]
+        if (this.selectedRiders.length > 0) this.showSelectedOnly = true
+
+        // age 는 백엔드가 ageOptions 값으로 내려준다. 직업은 특이사항에 자동 입력 (job 을 따로 넘기면 생성 프롬프트에 중복)
+        const { age, gender, job } = res.profile ?? {}
+        this.filters = {
+          ...this.filters,
+          age: this.ageOptions.includes(age) ? age : this.filters.age,
+          gender: this.genderOptions.includes(gender) ? gender : this.filters.gender,
+          ...(job ? { notes: job } : {}),
+        }
+
+        const missing = presetCodes.filter((code) => !toId(code)).length + (res.unmapped ?? []).length
+        if (!res.succ || this.selectedRiders.length === 0) {
+          this.showToast('가입설계의 특약을 불러오지 못했습니다. 특약을 직접 선택해 주세요.', 'error', 5000)
+        } else if (missing > 0) {
+          this.showToast(`가입설계 특약 중 ${missing}건은 코칭트랙에서 지원하지 않아 제외되었습니다.`, 'info', 5000)
+        }
+      } catch (e) {
+        // 원인 확인용: 상태 코드(허용 밖: 307/401/403/405/422/500 …) 또는 공통 응답 처리에서 던진 메시지
+        console.error('[coaching-track] preset 실패:', e?.response?.status ?? '', e?.message ?? e, e?.response?.data ?? '')
+        this.showToast('가입설계 정보를 불러오지 못했습니다.', 'error', 5000)
+      } finally {
+        this.isPresetting = false
+        const { presetKey: _p, sarangOnDataKey: _s, ...rest } = this.$route.query
+        this.$router.replace({ query: rest })
+      }
+    },
+
+    updateFilter(field, value) {
+      this.filters = { ...this.filters, [field]: value }
+    },
+    dropdownOptions(key) {
+      return key === 'product' ? this.availableProducts : this.ageOptions
+    },
+    dropdownValue(key) {
+      return key === 'product' ? this.selectedProduct : this.filters.age
+    },
+    dropdownActiveId(key) {
+      if (this.openDropdown !== key || this.dropdownActiveIndex < 0) return undefined
+      return `dropdown-option-${key}-${this.dropdownActiveIndex}`
+    },
+    openDropdownList(key) {
+      this.openDropdown = key
+      this.dropdownActiveIndex = Math.max(this.dropdownOptions(key).indexOf(this.dropdownValue(key)), 0)
+      this.revealDropdownActiveOption()
+    },
+    toggleDropdown(key) {
+      if (this.openDropdown === key) this.closeDropdown(key)
+      else this.openDropdownList(key)
+    },
+    closeDropdown(key) {
+      if (this.openDropdown !== key) return
+      this.openDropdown = null
+      this.dropdownActiveIndex = -1
+    },
+    chooseDropdownOption(key, value) {
+      if (key === 'product') this.selectedProduct = value
+      else this.updateFilter('age', value)
+      this.closeDropdown(key)
+    },
+    handleDropdownKeydown(key, event) {
+      const isOpen = this.openDropdown === key
+      if (event.key === 'Escape') {
+        if (isOpen) {
+          event.preventDefault()
+          this.closeDropdown(key)
+        }
+        return
+      }
+      if (event.key === 'Tab') {
+        this.closeDropdown(key)
+        return
+      }
+      if (!isOpen) {
+        if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+          event.preventDefault()
+          this.openDropdownList(key)
+        }
+        return
+      }
+
+      const options = this.dropdownOptions(key)
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        const value = options[this.dropdownActiveIndex]
+        if (value === undefined) this.closeDropdown(key)
+        else this.chooseDropdownOption(key, value)
+        return
+      }
+      const last = options.length - 1
+      const next = {
+        ArrowDown: Math.min(this.dropdownActiveIndex + 1, last),
+        ArrowUp: Math.max(this.dropdownActiveIndex - 1, 0),
+        Home: 0,
+        End: last,
+      }[event.key]
+      if (next === undefined) return
+      event.preventDefault()
+      this.dropdownActiveIndex = next
+      this.revealDropdownActiveOption()
+    },
+    revealDropdownActiveOption() {
+      this.$nextTick(() => {
+        const list = this.$refs[`dropdownListbox-${this.openDropdown}`]
+        const option = list?.children[this.dropdownActiveIndex]
+        if (!list || !option) return
+        const optionBottom = option.offsetTop + option.offsetHeight
+        if (option.offsetTop < list.scrollTop) list.scrollTop = option.offsetTop
+        else if (optionBottom > list.scrollTop + list.clientHeight) list.scrollTop = optionBottom - list.clientHeight
+      })
+    },
+    selectCategory(cat) {
+      this.activeCategory = cat
+      this.showSelectedOnly = false
+    },
+    toggleCategoryExpand() {
+      this.categoryExpanded = !this.categoryExpanded
+    },
+    toggleRider(id) {
+      this.selectedRiders = toggleItem(this.selectedRiders, id)
+    },
+    removeRider(id) {
+      this.selectedRiders = this.selectedRiders.filter((r) => r !== id)
+    },
+    showMoreRiders() {
+      this.visibleRiderLimit = Math.min(this.filteredRiders.length, this.visibleRiderLimit + RIDER_BATCH_SIZE)
+    },
+
+    observeSelectionLayout() {
+      this.disconnectObservers()
+      const { riderListEl, categoryRail } = this.$refs
+      this.measureRiderGridColumns()
+      this.measureCategoryOverflow()
+      if (typeof ResizeObserver === 'undefined') return
+      if (riderListEl) {
+        this.riderGridRO = new ResizeObserver(() => this.measureRiderGridColumns())
+        this.riderGridRO.observe(riderListEl)
+      }
+      if (categoryRail) {
+        this.categoryRO = new ResizeObserver(() => this.measureCategoryOverflow())
+        this.categoryRO.observe(categoryRail)
+      }
+    },
+    disconnectObservers() {
+      this.riderGridRO?.disconnect()
+      this.categoryRO?.disconnect()
+      this.riderGridRO = null
+      this.categoryRO = null
+    },
+    measureRiderGridColumns() {
+      const el = this.$refs.riderListEl
+      if (!el) {
+        this.riderGridHasThreeColumns = false
+        return
+      }
+      const template = window.getComputedStyle(el).gridTemplateColumns.trim()
+      const columnCount = template && template !== 'none' ? template.split(/\s+/).length : 1
+      const nextHasThreeColumns = columnCount >= 3
+      const previousHasThreeColumns = this.riderGridHasThreeColumns
+      if (nextHasThreeColumns === previousHasThreeColumns) return
+
+      const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      const focusedCard = activeElement?.closest('.rider-card-large')
+      const focusedCardIndex = focusedCard
+        ? Array.from(el.querySelectorAll('.rider-card-large')).indexOf(focusedCard)
+        : -1
+      const shouldRestoreFocus =
+        (!previousHasThreeColumns && nextHasThreeColumns && activeElement === this.$refs.riderLoadMoreBtn) ||
+        (previousHasThreeColumns && !nextHasThreeColumns && focusedCardIndex >= this.visibleRiderLimit)
+
+      this.riderGridHasThreeColumns = nextHasThreeColumns
+      if (shouldRestoreFocus) {
+        this.$nextTick(() => this.$refs.riderListEl?.focus({ preventScroll: true }))
+      }
+    },
+    measureCategoryOverflow() {
+      const el = this.$refs.categoryRail
+      if (!el) return
+      const probing = this.categoryExpanded
+      if (probing) el.classList.add('is-measuring')
+      const over = el.scrollWidth > el.clientWidth + 1
+      if (probing) el.classList.remove('is-measuring')
+      this.categoryOverflow = over
+      if (!over && this.categoryExpanded) this.categoryExpanded = false
+    },
+    revealCategoryChip(el) {
+      const rail = this.$refs.categoryRail
+      if (!rail || this.categoryExpanded || !(el instanceof HTMLElement)) return
+      const railBox = rail.getBoundingClientRect()
+      const chipBox = el.getBoundingClientRect()
+      const startPad = 12
+      const endPad = this.categoryOverflow ? 58 : 12
+      if (chipBox.left < railBox.left + startPad) {
+        rail.scrollLeft -= railBox.left + startPad - chipBox.left
+      } else if (chipBox.right > railBox.right - endPad) {
+        rail.scrollLeft += chipBox.right - (railBox.right - endPad)
+      }
+    },
+
+    handleChangeView(view) {
+      if (this.currentMode === view) return
+      this.$router.push({ query: { ...this.$route.query, mode: view } })
+    },
+    handleBackToSelection() {
+      if (this.currentMode === 'view') {
+        this.handleChangeView('list')
+        return
+      }
+      this.isComingSoon = false
+      this.returningToEdit = true
+    },
+
+    async submitFilter() {
+      if (this.isGenerating) return
+      if (this.selectedRiders.length === 0) {
+        this.showToast('특약을 하나 이상 선택해 주세요.', 'error', 5000)
+        return
+      }
+      if (!this.isCurrentProductReady) {
+        this.isComingSoon = true
+        return
+      }
+      if (this.currentMode !== 'view') this.activeTab = 'script'
+      this.isComingSoon = false
+      this.returningToEdit = false
+      this.handleChangeView('view')
+      this.resultRiders = this.selectedDataFull.map((rider) => ({ ...rider }))
+      this.resultFilters = { ...this.filters }
+      this.resultConditionKey = this.currentConditionKey
+      this.expandedClaimNames = []
+      this.expandedScriptNames = []
+      this.expandedDescNames = []
+      await this.generate()
+    },
+    async resolveRiders() {
+      const jarCode = this.productCodeByName[this.selectedProduct]
+      if (!jarCode) throw new Error('상품 정보가 없습니다.')
+      const { riders } = await this.$axios.post('/coaching/riders/resolve', {
+        jar_code: jarCode,
+        jar_rd_codes: this.resultRiders.map((r) => r.id),
+      })
+      if (!Array.isArray(riders) || riders.length === 0) throw new Error('지급사유를 조회하지 못했습니다.')
+      const nameById = Object.fromEntries(this.resultRiders.map((r) => [r.id, r.name]))
+      this.resultRiders = this.resultRiders.map((r) => {
+        const found = riders.find((x) => x.jar_rd_code === r.id)
+        return { ...r, descriptionHtml: found?.description_html ?? '' }
+      })
+      return riders.map((x) => ({ ...x, name: nameById[x.jar_rd_code] ?? x.name }))
+    },
+    async generate() {
+      this.isGenerating = true
+      this.generatedScript = { designSummary: undefined, riderScripts: [], qna: [] }
+      this.scriptTotalCount = 0
+      this.scriptPageCount = 0
+      this.scriptPages = []
+      this.scriptRevealedPages = 1
+
+      let riders
+      try {
+        riders = await this.resolveRiders()
+      } catch (e) {
+        const msg = e?.response?.data?.detail ?? e?.message ?? String(e)
+        this.showToast(`지급사유 조회에 실패했습니다: ${msg}`, 'error', 5000)
+        this.isGenerating = false
+        this.handleChangeView('list')
+        return
+      }
+      const payload = { profile: { ...this.resultFilters }, riders }
+
+      const statsP = this.$axios.post('/coaching/generate/stats', payload)
+        .then((st) => {
+          this.generatedScript = {
+            ...this.generatedScript,
+            designSummary: {
+              highlights: st.highlights ?? [],
+              statistics: st.statistics ?? [],
+              tips: this.generatedScript.designSummary?.tips ?? [],
+            },
+          }
+        })
+        .catch(() => {})
+
+      // 특약 9개씩 순서대로 요청 → 페이지 단위로 화면에 표시
+      const scriptsP = this.generateScriptsInPages(payload)
+        // 영업 꿀팁: 만들어진 화법 전부 + 고객정보로 별도 생성
+        .then((riderScripts) => this.fetchTips(payload.profile, riderScripts))
+
+      const qnaP = this.$axios.post('/coaching/generate/qna', payload)
+        .then((s3) => {
+          this.generatedScript = { ...this.generatedScript, qna: s3.qna ?? [] }
+        })
+        .catch(() => {})
+
+      try {
+        await Promise.all([statsP, scriptsP, qnaP])
+      } catch (e) {
+        const msg = e?.response?.data?.detail ?? e?.message ?? String(e)
+        console.error('[coaching-track] 화법 생성 실패:', msg)
+        this.showToast(`화법 생성에 실패했습니다: ${msg}`, 'error', 5000)
+      } finally {
+        this.isGenerating = false
+      }
+    },
+    // 특약별 화법: 9개씩 잘라 /generate/scripts 를 "하나씩 순서대로" 호출
+    //   - 요청 1번 = 9개 → 백엔드가 3개씩 묶어 동시 3개 LLM 호출 → 9개가 한 번에 응답 (동시 LLM 호출은 항상 3개)
+    //   - 첫 페이지가 오면 바로 표시하고, 사용자가 읽는 동안 다음 페이지를 이어서 생성
+    //   - 페이지 하나가 실패하면 빈 페이지로 두고 다음 페이지 계속, 전부 실패하면 에러
+    async generateScriptsInPages(payload) {
+      const usable = payload.riders.filter((r) => r.has_reason)
+      if (usable.length === 0) throw new Error('지급사유가 있는 특약이 없어 화법을 생성할 수 없습니다.')
+
+      const pages = []
+      for (let i = 0; i < usable.length; i += SCRIPT_PAGE_SIZE) pages.push(usable.slice(i, i + SCRIPT_PAGE_SIZE))
+      this.scriptTotalCount = usable.length
+      this.scriptPageCount = pages.length
+      this.scriptPages = new Array(pages.length).fill(undefined)
+
+      const received = []
+      const errors = []
+      for (let i = 0; i < pages.length; i++) {
+        let list = []
+        try {
+          // 공통 에러 처리(404 → 에러 페이지, 422/500 → 재접속)를 타지 않도록 상태는 직접 처리
+          const res = await this.$axios.post('/coaching/generate/scripts', { ...payload, riders: pages[i] }, { validateStatus: () => true })
+          list = Array.isArray(res?.riderScripts) ? res.riderScripts : []
+          if (list.length === 0) errors.push(res?.detail || '화법 응답이 비어 있습니다.')
+        } catch (e) {
+          errors.push(e?.message ?? String(e))
+        }
+        received.push(...list)
+        this.scriptPages = this.scriptPages.map((page, idx) => (idx === i ? list : page))
+        this.generatedScript = { ...this.generatedScript, riderScripts: [...received] }
+      }
+
+      if (errors.length) console.error('[coaching-track] 화법 페이지 실패:', errors)
+      // 빈 페이지(실패)는 건너뛰고 받은 화법만으로 다시 9개씩 나눔
+      this.scriptTotalCount = received.length
+      const regrouped = []
+      for (let i = 0; i < received.length; i += SCRIPT_PAGE_SIZE) regrouped.push(received.slice(i, i + SCRIPT_PAGE_SIZE))
+      this.scriptPages = regrouped
+      this.scriptPageCount = regrouped.length
+      if (received.length === 0) throw new Error(typeof errors[0] === 'string' ? errors[0] : '화법을 생성하지 못했습니다.')
+      return received
+    },
+    // 영업 꿀팁. 실패해도 화법 결과에는 영향 없이 섹션만 숨김 (tips 가 비면 v-if 로 안 보임)
+    async fetchTips(profile, riderScripts) {
+      try {
+        // 공통 에러 처리(404 → 에러 페이지, 422/500 → 재접속)를 타지 않도록 모든 상태를 직접 처리
+        const res = await this.$axios.post('/coaching/generate/tips', { profile, riderScripts }, { validateStatus: () => true })
+        const tips = Array.isArray(res?.tips) ? res.tips.filter((t) => typeof t === 'string' && t.trim()) : []
+        const prev = this.generatedScript.designSummary ?? { highlights: [], statistics: [] }
+        this.generatedScript = { ...this.generatedScript, designSummary: { ...prev, tips } }
+      } catch (e) {
+        console.error('[coaching-track] 영업 꿀팁 생성 실패:', e)
+      }
+    },
+
+    handleResultTabKeydown(event) {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+      event.preventDefault()
+      if (event.key === 'Home') this.activeTab = 'script'
+      else if (event.key === 'End') this.activeTab = 'points'
+      else this.activeTab = this.activeTab === 'script' ? 'points' : 'script'
+      this.$nextTick(() => document.getElementById(`result-tab-${this.activeTab}`)?.focus())
+    },
+    toggleScript(name) {
+      if (this.expandedScriptNames.includes(name)) {
+        this.expandedDescNames = this.expandedDescNames.filter((n) => n !== name)
+      }
+      this.expandedScriptNames = toggleItem(this.expandedScriptNames, name)
+    },
+    toggleDesc(name) {
+      this.expandedDescNames = toggleItem(this.expandedDescNames, name)
+    },
+    toggleClaim(name) {
+      this.expandedClaimNames = toggleItem(this.expandedClaimNames, name)
+    },
+    scriptTriggerId(index) {
+      return `rider-script-trigger-${index}`
+    },
+    scriptPanelId(index) {
+      return `rider-script-panel-${index}`
+    },
+    scriptDescriptionId(index) {
+      return `rider-script-description-${index}`
+    },
+    // 지급사유: resolve 응답의 description_html 을 renderMarkdown 으로 (다른 화면과 동일, 내부에서 DOMPurify 정리)
+    claimHtml(name) {
+      const html = this.resultRiders.find((r) => r.name === name)?.descriptionHtml
+      return renderMarkdown(html || '지급사유 정보가 없습니다.')
+    },
+    barWidth(item, chartData) {
+      const max = Math.max(...chartData.map((d) => d.value), 1)
+      return ((item.value / max) * 100).toFixed(1) + '%'
+    },
+    barColor(index) {
+      return BAR_COLORS[index % BAR_COLORS.length]
+    },
+    formatNumber(value) {
+      return value.toLocaleString('ko-KR')
+    },
+
+    sidebarOptionId(rider) {
+      return `sidebar-rider-option-${rider.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+    },
+    syncSidebarActiveIndex(preferred = 0) {
+      const last = this.sidebarCandidateRiders.length - 1
+      this.sidebarActiveIndex = last < 0 ? -1 : Math.min(Math.max(preferred, 0), last)
+    },
+    revealSidebarActiveOption() {
+      this.$nextTick(() => {
+        const list = this.$refs.sidebarListbox
+        const option = list?.children[this.sidebarActiveIndex]
+        if (!list || !option) return
+        const optionBottom = option.offsetTop + option.offsetHeight
+        if (option.offsetTop < list.scrollTop) list.scrollTop = option.offsetTop
+        else if (optionBottom > list.scrollTop + list.clientHeight) list.scrollTop = optionBottom - list.clientHeight
+      })
+    },
+    openSidebarCombobox() {
+      this.sidebarComboboxOpen = true
+      this.syncSidebarActiveIndex(Math.max(this.sidebarActiveIndex, 0))
+    },
+    closeSidebarCombobox() {
+      this.sidebarComboboxOpen = false
+      this.sidebarActiveIndex = -1
+    },
+    handleSidebarSearchInput() {
+      this.sidebarComboboxOpen = true
+      this.$nextTick(() => this.syncSidebarActiveIndex(0))
+    },
+    addSidebarRider(rider) {
+      if (!this.selectedRiders.includes(rider.id)) this.selectedRiders.push(rider.id)
+      this.sidebarSearchTerm = ''
+      this.sidebarComboboxOpen = true
+      this.$nextTick(() => {
+        this.syncSidebarActiveIndex(0)
+        this.$refs.sidebarSearchInput?.focus()
+      })
+    },
+    handleSidebarSearchKeydown(event) {
+      if (event.isComposing || this.sidebarComposing) return
+
+      if (event.key === 'Escape') {
+        if (this.sidebarComboboxOpen) {
+          event.preventDefault()
+          this.closeSidebarCombobox()
+        }
+        return
+      }
+
+      if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+        event.preventDefault()
+        const wasClosed = !this.sidebarComboboxOpen
+        if (wasClosed) this.openSidebarCombobox()
+        const count = this.sidebarCandidateRiders.length
+        if (count === 0) return
+        if (event.key === 'Home' || (wasClosed && event.key === 'ArrowDown')) this.sidebarActiveIndex = 0
+        else if (event.key === 'End' || (wasClosed && event.key === 'ArrowUp')) this.sidebarActiveIndex = count - 1
+        else if (event.key === 'ArrowDown') this.sidebarActiveIndex = (this.sidebarActiveIndex + 1) % count
+        else this.sidebarActiveIndex = (this.sidebarActiveIndex - 1 + count) % count
+        this.revealSidebarActiveOption()
+        return
+      }
+
+      if (event.key === 'Enter' && this.sidebarComboboxOpen && this.sidebarActiveIndex >= 0) {
+        const rider = this.sidebarCandidateRiders[this.sidebarActiveIndex]
+        if (rider) {
+          event.preventDefault()
+          this.addSidebarRider(rider)
+        }
+      }
+    },
+    handleSidebarSearchBlur() {
+      this.$nextTick(() => {
+        if (!this.$refs.sidebarComboboxRoot?.contains(document.activeElement)) this.closeSidebarCombobox()
+      })
+    },
+    handleSidebarPointerDown(event) {
+      if (!(event.target instanceof Node) || this.$refs.sidebarComboboxRoot?.contains(event.target)) return
+      this.closeSidebarCombobox()
+    },
+  },
 }
 </script>
+
 
 <template>
   <div class="app-root">
 
-    <!-- ── Toast ─────────────────────────────────────────────────────────── -->
-    <div class="toast-container">
+    <div class="toast-container" role="status" aria-live="polite" aria-relevant="additions text">
       <div
         v-for="toast in toasts"
         :key="toast.id"
@@ -256,122 +919,211 @@ async function generateSalesTalk() {
       </div>
     </div>
 
-    <!-- ── Header ────────────────────────────────────────────────────────── -->
     <header class="header">
-      <div class="logo" style="cursor: pointer;" @click="resetAndGoBack">
-        <span class="logo-main">보험피터</span>
-        <span class="logo-tagline">영업 준비를 핏(fit)하게</span>
+      <div class="service-bar">
+        <div class="logo" @click="handleChangeView('list')">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M10.6 3.6a5.9 5.9 0 0 0-3.5 10.6c.5.4.9 1.1.9 1.8h5.2c0-.7.4-1.4.9-1.8a5.9 5.9 0 0 0-3.5-10.6Z" />
+            <path d="M8.2 18.6h4.8" />
+            <path d="M9.2 21h2.8" />
+            <path d="m19.7 3.4.55 1.55 1.55.55-1.55.55-.55 1.55-.55-1.55-1.55-.55 1.55-.55.55-1.55Z" />
+          </svg>
+          <span class="logo-main">특약피터</span>
+          <span class="header-tagline">영업 준비를 <strong>핏(fit)하게</strong></span>
+        </div>
       </div>
-      <nuxt-link to="/main" class="back-btn header-back-btn">← AI서치 홈</nuxt-link>
-      <button
-        v-if="currentStep === 'result' || currentStep === 'coming-soon'"
-        class="back-btn header-back-btn"
-        @click="currentStep = 'selection'; returningToEdit = true"
-      >
-        ← 특약 다시 선택하기
-      </button>
+
     </header>
 
-    <!-- ── STEP 1: Selection View ─────────────────────────────────────────── -->
-    <div v-if="currentStep === 'selection'" class="selection-view">
+    <div v-if="currentMode === 'list' && !isComingSoon" class="selection-view">
 
-      <!-- 상품 선택 -->
       <div class="product-selector-bar">
-        <label class="product-selector-label">상품 선택</label>
-        <select class="product-selector-select" v-model="selectedProduct">
-          <option v-for="p in availableProducts" :key="p" :value="p">{{ p }}</option>
-        </select>
+        <div class="product-selector-heading">
+          <div class="product-selector-title">상품을 선택해 주세요</div>
+        </div>
+        <button
+          ref="dropdownTrigger-product"
+          type="button"
+          class="product-selector-select"
+          role="combobox"
+          aria-label="상품 선택"
+          aria-haspopup="listbox"
+          :aria-expanded="openDropdown === 'product' ? 'true' : 'false'"
+          aria-controls="dropdown-listbox-product"
+          :aria-activedescendant="dropdownActiveId('product')"
+          @click="toggleDropdown('product')"
+          @keydown="handleDropdownKeydown('product', $event)"
+          @blur="closeDropdown('product')"
+        >{{ selectedProduct }}</button>
+        <ul
+          v-show="openDropdown === 'product'"
+          id="dropdown-listbox-product"
+          ref="dropdownListbox-product"
+          class="select-listbox"
+          role="listbox"
+          aria-label="상품"
+        >
+          <li
+            v-for="(p, index) in availableProducts"
+            :id="`dropdown-option-product-${index}`"
+            :key="p"
+            class="select-option"
+            :class="{ active: index === dropdownActiveIndex, selected: p === selectedProduct }"
+            role="option"
+            :aria-selected="p === selectedProduct ? 'true' : 'false'"
+            @mouseenter="dropdownActiveIndex = index"
+            @mousedown.prevent
+            @click="chooseDropdownOption('product', p)"
+          >{{ p }}</li>
+        </ul>
       </div>
 
-      <!-- ProfileForm -->
-      <div v-if="openField" class="profile-overlay" @click="closeAllDropdowns"></div>
       <div class="selection-header-section">
-        <div class="card profile-card-step1" @click.self="closeAllDropdowns">
+        <div class="card profile-card-step1">
             <div class="card-title">고객 정보</div>
 
-            <div class="profile-row">
-              <div class="profile-field" :class="{ open: openField === 'age' }">
-                <button class="profile-field-btn" @click.stop="toggleField('age')">
-                  <span class="field-label">나이대</span>
-                  <span class="field-value">{{ profile.age }} <span class="field-arrow">▾</span></span>
-                </button>
-                <div v-if="openField === 'age'" class="field-dropdown">
+            <section class="profile-selector">
+              <div class="profile-selector__fields">
+                <div class="profile-selector__field">
                   <button
-                    v-for="opt in ageOptions"
-                    :key="opt"
-                    class="dropdown-opt"
-                    :class="{ active: profile.age === opt }"
-                    @click.stop="updateProfile('age', opt)"
-                  >{{ opt }}</button>
+                    :id="ageSelectId"
+                    ref="dropdownTrigger-age"
+                    type="button"
+                    class="profile-selector__select"
+                    role="combobox"
+                    aria-label="연령대"
+                    aria-haspopup="listbox"
+                    :aria-expanded="openDropdown === 'age' ? 'true' : 'false'"
+                    aria-controls="dropdown-listbox-age"
+                    :aria-activedescendant="dropdownActiveId('age')"
+                    @click="toggleDropdown('age')"
+                    @keydown="handleDropdownKeydown('age', $event)"
+                    @blur="closeDropdown('age')"
+                  >{{ filters.age }}</button>
+                  <ul
+                    v-show="openDropdown === 'age'"
+                    id="dropdown-listbox-age"
+                    ref="dropdownListbox-age"
+                    class="select-listbox"
+                    role="listbox"
+                    aria-label="연령대"
+                  >
+                    <li
+                      v-for="(opt, index) in ageOptions"
+                      :id="`dropdown-option-age-${index}`"
+                      :key="opt"
+                      class="select-option"
+                      :class="{ active: index === dropdownActiveIndex, selected: opt === filters.age }"
+                      role="option"
+                      :aria-selected="opt === filters.age ? 'true' : 'false'"
+                      @mouseenter="dropdownActiveIndex = index"
+                      @mousedown.prevent
+                      @click="chooseDropdownOption('age', opt)"
+                    >{{ opt }}</li>
+                  </ul>
                 </div>
+
+                <fieldset class="profile-selector__group" aria-label="성별">
+                  <div class="profile-segment">
+                    <label v-for="opt in genderOptions" :key="opt" class="profile-segment__option">
+                      <input
+                        type="radio"
+                        name="profile-gender"
+                        :value="opt"
+                        :checked="filters.gender === opt"
+                        @change="updateFilter('gender', opt)"
+                      />
+                      <span class="profile-segment__surface">
+                        <span class="profile-segment__indicator" aria-hidden="true">
+                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="3"
+                               stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4.5 10.5l4 4 7-8" />
+                          </svg>
+                        </span>
+                        <span>{{ opt }}</span>
+                      </span>
+                    </label>
+                  </div>
+                </fieldset>
               </div>
 
-              <div class="profile-field" :class="{ open: openField === 'gender' }">
-                <button class="profile-field-btn" @click.stop="toggleField('gender')">
-                  <span class="field-label">성별</span>
-                  <span class="field-value">{{ profile.gender }} <span class="field-arrow">▾</span></span>
-                </button>
-                <div v-if="openField === 'gender'" class="field-dropdown">
-                  <button
-                    v-for="opt in genderOptions"
-                    :key="opt"
-                    class="dropdown-opt"
-                    :class="{ active: profile.gender === opt }"
-                    @click.stop="updateProfile('gender', opt)"
-                  >{{ opt }}</button>
-                </div>
-              </div>
-            </div>
+              <p class="profile-selector__result" role="status" aria-live="polite">
+                <span v-if="profileSummary"><strong>{{ profileSummary }}</strong> 기준으로 맞춤 결과를 보여드려요.</span>
+              </p>
+            </section>
 
             <div class="profile-notes-row">
               <span class="field-label">특이사항</span>
               <input
                 class="notes-input"
                 placeholder="예시) 사무직, 고혈압 약 복용"
-                :value="profile.notes"
-                @input="updateProfile('notes', $event.target.value)"
+                :value="filters.notes"
+                @input="updateFilter('notes', $event.target.value)"
                 @click.stop
               />
             </div>
         </div>
       </div>
 
-      <!-- RiderGrid -->
       <div>
-        <div v-if="selectedRiders.length > 0" class="selected-view-bar">
+        <label v-if="selectedRiders.length > 0" class="selected-only-toggle">
+          <input v-model="showSelectedOnly" type="checkbox" />
+          <span>선택 특약만 보기 ({{ selectedRiders.length }}개)</span>
+        </label>
+
+        <div
+          class="category-filter"
+          :class="{ 'is-expanded': categoryExpanded, 'has-overflow': categoryOverflow }"
+        >
+          <div id="category-rail" ref="categoryRail" class="category-pills-wrap">
+            <button
+              class="cat-pill"
+              :class="{ active: activeCategory === '전체' }"
+              :aria-pressed="activeCategory === '전체' ? 'true' : 'false'"
+              @click="selectCategory('전체'); revealCategoryChip($event.currentTarget)"
+            >
+              전체 <span class="cat-count">{{ productRiders.length }}</span>
+            </button>
+            <button
+              v-for="[category, items] in groupedRiders"
+              :key="category"
+              class="cat-pill"
+              :class="{ active: activeCategory === category }"
+              :aria-pressed="activeCategory === category ? 'true' : 'false'"
+              @click="selectCategory(category); revealCategoryChip($event.currentTarget)"
+            >
+              {{ category }} <span class="cat-count">{{ items.length }}</span>
+            </button>
+          </div>
           <button
-            class="selected-view-btn"
-            :class="{ active: showSelectedOnly }"
-            @click="toggleSelectedOnly"
+            v-if="categoryOverflow"
+            type="button"
+            class="category-expand-toggle"
+            aria-controls="category-rail"
+            :aria-expanded="categoryExpanded ? 'true' : 'false'"
+            :aria-label="categoryExpanded ? '필터 항목 한 줄로 접기' : '필터 항목 모두 펼치기'"
+            @click="toggleCategoryExpand"
           >
-            {{ showSelectedOnly ? '✓ 선택된 특약 보기' : '선택된 특약 보기' }} ({{ selectedRiders.length }}개)
+            <svg class="category-expand-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+              <path
+                d="M5 8l5 5 5-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
           </button>
         </div>
 
-        <div class="category-pills-wrap">
-          <button
-            class="cat-pill"
-            :class="{ active: activeCategory === '전체' }"
-            @click="selectCategory('전체')"
-          >
-            전체 <span class="cat-count">{{ productRiders.length }}</span>
-          </button>
-          <button
-            v-for="[category, items] in groupedRiders"
-            :key="category"
-            class="cat-pill"
-            :class="{ active: activeCategory === category }"
-            @click="selectCategory(category)"
-          >
-            {{ category }} <span class="cat-count">{{ items.length }}</span>
-          </button>
-        </div>
+        <p class="sr-only" role="status" aria-live="polite">{{ selectionStatusText }}</p>
 
         <div class="selection-main-grid">
-          <div class="rider-grid-large">
-            <!-- RiderCard 인라인 -->
+          <div id="rider-selection-list" ref="riderListEl" tabindex="-1" class="rider-grid-large">
             <div
-              v-for="rider in filteredRiders"
+              v-for="rider in visibleRiders"
               :key="rider.id"
               class="rider-card-large"
               :class="{ selected: selectedRiders.includes(rider.id) }"
@@ -382,6 +1134,7 @@ async function generateSalesTalk() {
                   type="checkbox"
                   class="rider-checkbox-large"
                   :checked="selectedRiders.includes(rider.id)"
+                  :aria-label="rider.name"
                   @click.stop="toggleRider(rider.id)"
                 />
               </div>
@@ -391,22 +1144,33 @@ async function generateSalesTalk() {
               검색 결과가 없습니다.
             </div>
           </div>
+          <button
+            v-if="showRiderLoadMore"
+            ref="riderLoadMoreBtn"
+            type="button"
+            class="rider-load-more"
+            aria-controls="rider-selection-list"
+            :aria-disabled="remainingRiderCount === 0 ? 'true' : 'false'"
+            @click="remainingRiderCount > 0 && showMoreRiders()"
+          >
+            <span>{{ remainingRiderCount > 0 ? `더보기 (${remainingRiderCount}개)` : `전체 ${filteredRiders.length}개 표시됨` }}</span>
+          </button>
         </div>
       </div>
 
       <div class="selection-footer">
         <button
           class="main-generate-btn"
-          @click="generateSalesTalk"
+          @click="submitFilter"
           :disabled="selectedRiders.length === 0"
         >
-          맞춤 화법 생성하기
+          맞춤 화법 생성하기 ({{ selectedRiders.length }}개)
         </button>
       </div>
+
     </div>
 
-    <!-- ── STEP: Coming Soon ──────────────────────────────────────────────── -->
-    <div v-else-if="currentStep === 'coming-soon'" class="coming-soon-view">
+    <div v-else-if="isComingSoon" class="coming-soon-view">
       <div class="coming-soon-card">
         <div class="coming-soon-icon">🚧</div>
         <h2 class="coming-soon-title">준비 중인 상품입니다</h2>
@@ -414,196 +1178,304 @@ async function generateSalesTalk() {
           <strong>{{ selectedProduct }}</strong> 상품의 화법 데이터를 준비하고 있습니다.<br>
           빠른 시일 내에 제공될 예정입니다.
         </p>
-        <button class="coming-soon-back-btn" @click="currentStep = 'selection'; returningToEdit = true">
+        <button class="coming-soon-back-btn" @click="handleBackToSelection">
           ← 특약 선택으로 돌아가기
         </button>
       </div>
     </div>
 
-    <!-- ── STEP 2: Result View ────────────────────────────────────────────── -->
     <div v-else class="container">
 
-      <!-- 모바일 상단 요약 -->
-      <div class="mobile-top-summary">
-        <div class="mobile-summary-profile">
-          <strong>{{ profile.age }} {{ profile.gender }}</strong>
-          <span v-if="profile.notes"> | {{ profile.notes }}</span>
+      <div class="mobile-top-summary" :data-expanded="summaryExpanded ? 'true' : 'false'">
+        <div class="summary-lead">
+          <button
+            class="summary-return"
+            type="button"
+            :aria-label="summaryReturnLabel"
+            @click="handleBackToSelection"
+          >
+            <span class="summary-return__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14.5 5-7 7 7 7"/></svg>
+            </span>
+            <span class="summary-profile">
+              <span class="summary-profile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20c.7-4 3.2-6 6.5-6s5.8 2 6.5 6"/></svg></span>
+              <span class="summary-profile__value">{{ filters.age }} {{ filters.gender }}</span>
+            </span>
+          </button>
         </div>
-        <div class="mobile-summary-chips">
-          <div v-for="rider in selectedDataFull" :key="rider.id" class="chip-compact">
-            {{ rider.name }}
+
+        <p v-if="filters.notes" class="summary-notes">{{ filters.notes }}</p>
+
+        <div class="summary-riders">
+          <span class="summary-riders__count">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4 4 10-10"/></svg>
+            특약 <b>{{ summaryRiders.length }}건</b>
+          </span>
+          <button
+            v-if="summaryHiddenCount > 0"
+            class="rider-headlink"
+            type="button"
+            aria-controls="summary-rider-list"
+            :aria-expanded="summaryExpanded ? 'true' : 'false'"
+            @click="summaryExpanded = !summaryExpanded"
+          >
+            {{ summaryExpanded ? '접기' : '전체보기' }}
+            <svg class="summary-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 10 6 6 6-6"/></svg>
+          </button>
+        </div>
+
+        <div id="summary-rider-list" class="rider-list">
+          <div v-for="r in summaryRiders" :key="r.id" class="rider-list__item">
+            <span class="rider-list__no">{{ r.no }}</span>
+            <span class="rider-list__name">{{ r.main }}<span v-if="r.sub" class="rider-list__sub">{{ r.sub }}</span></span>
           </div>
+          <button
+            v-if="summaryHiddenCount > 0"
+            class="rider-more"
+            type="button"
+            aria-controls="summary-rider-list"
+            :aria-expanded="summaryExpanded ? 'true' : 'false'"
+            @click="summaryExpanded = !summaryExpanded"
+          >
+            {{ summaryExpanded ? '접기' : `${summaryHiddenCount}건 더보기` }}
+            <svg class="summary-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 10 6 6 6-6"/></svg>
+          </button>
         </div>
       </div>
 
-      <!-- ResultView -->
       <main class="content">
-        <div class="tabs">
-          <div class="tab" :class="{ active: activeTab === 'script' }" @click="activeTab = 'script'">
-            특약별 화법
-          </div>
-          <div class="tab" :class="{ active: activeTab === 'points' }" @click="activeTab = 'points'">
-            예상 Q&A
-          </div>
-        </div>
-
-        <div v-if="isGenerating && !generatedScript?.designSummary && !generatedScript?.qna?.length" class="loader-container">
-          <div class="loader"></div>
-          <p style="text-align: center; color: #64748b; line-height: 1.6">
-            <strong>설계 요약을 분석 중입니다...</strong><br />
-            통계 자료와 핵심 수치를 구성하고 있습니다.
-          </p>
-        </div>
-
-        <div v-else-if="generatedScript" class="script-box">
-          <!-- 설계 요약 -->
-          <template v-if="activeTab === 'script' && generatedScript.designSummary">
-            <div class="design-summary">
-              <div class="summary-header">설계 요약</div>
-
-              <div v-if="generatedScript.designSummary.highlights && generatedScript.designSummary.highlights.length" class="highlight-grid">
-                <div
-                  v-for="(h, hi) in generatedScript.designSummary.highlights"
-                  :key="hi"
-                  class="highlight-card"
-                >
-                  <div class="highlight-icon">{{ h.icon }}</div>
-                  <div class="highlight-headline">{{ h.headline }}</div>
-                  <div class="highlight-detail">{{ h.detail }}</div>
-                  <div class="highlight-source">{{ h.source }}</div>
-                </div>
-              </div>
-
-              <div class="stats-row">
-                <div
-                  v-for="(stat, si) in generatedScript.designSummary.statistics"
-                  :key="si"
-                  class="stat-block"
-                >
-                  <div class="stat-title">
-                    📊 {{ stat.title }}
-                    <span v-if="stat.unit" class="stat-unit-label">{{ stat.unit }}</span>
-                  </div>
-                  <div v-if="stat.reason" class="stat-reason">{{ stat.reason }}</div>
-
-                  <div class="stat-body">
-                    <div v-if="stat.chartType === 'bar' && stat.chartData" class="stat-chart">
-                      <div v-for="(item, ii) in stat.chartData" :key="ii" class="stat-bar-row">
-                        <div class="bar-header">
-                          <span class="bar-label">{{ item.label }}</span>
-                          <span class="bar-value">{{ formatNumber(item.value) }}</span>
-                        </div>
-                        <div class="bar-track">
-                          <div
-                            class="bar-fill"
-                            :style="{ width: barWidth(item, stat.chartData), background: barColor(ii) }"
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div v-else-if="stat.chartType === 'donut'" class="donut-wrapper">
-                      <svg viewBox="0 0 36 36" class="donut-svg">
-                        <circle class="donut-ring" cx="18" cy="18" r="15.9" fill="none" stroke="#e2e8f0" stroke-width="3.5"/>
-                        <circle
-                          class="donut-segment"
-                          cx="18" cy="18" r="15.9"
-                          fill="none"
-                          stroke="var(--primary-color)"
-                          stroke-width="3.5"
-                          :stroke-dasharray="`${stat.percent ?? 0} ${100 - (stat.percent ?? 0)}`"
-                          stroke-dashoffset="25"
-                          stroke-linecap="round"
-                        />
-                      </svg>
-                      <div class="donut-center">
-                        <div class="donut-center-label">{{ stat.centerLabel }}</div>
-                        <div class="donut-center-sub">{{ stat.centerSub }}</div>
-                      </div>
-                    </div>
-
-                    <div v-else-if="stat.chartType === 'comparison' && stat.chartData" class="comparison-chart">
-                      <div v-for="(item, ii) in stat.chartData" :key="ii" class="comparison-col">
-                        <div class="comparison-val">{{ formatNumber(item.value) }}</div>
-                        <div class="comparison-bar-outer">
-                          <div
-                            class="comparison-bar-inner"
-                            :style="{
-                              height: barWidth(item, stat.chartData),
-                              background: COMPARISON_COLORS[ii % COMPARISON_COLORS.length],
-                            }"
-                          ></div>
-                        </div>
-                        <div class="comparison-label">{{ item.label }}</div>
-                      </div>
-                    </div>
-
-                    <div class="stat-description">{{ stat.description || '' }}</div>
-                  </div>
-
-                  <div class="stat-source">출처: {{ stat.source }} · {{ stat.period }}</div>
-                </div>
-              </div>
-
-              <div class="summary-tips-block">
-                <div class="summary-block-title">💡 영업 꿀팁</div>
-                <div v-if="isGenerating && !generatedScript.designSummary.tips?.length" class="phase-loader">
-                  <div class="loader"></div>
-                  <span>영업 꿀팁을 생성 중입니다...</span>
-                </div>
-                <div
-                  v-for="(tip, ti) in generatedScript.designSummary.tips"
-                  :key="ti"
-                  class="summary-tip-item"
-                >
-                  {{ tip }}
-                </div>
+        <section class="consultation-opening" aria-labelledby="consultation-opening-title">
+          <div class="consultation-opening__header">
+            <div>
+              <p class="consultation-opening__eyebrow">상담 시작 가이드</p>
+              <div class="consultation-opening__title-row">
+                <h1 id="consultation-opening-title" class="consultation-opening__title">설계 요약</h1>
+                <p class="consultation-opening__notice">* 선택 조건을 바탕으로 구성한 상담 참고용 초안입니다. 실제 보장 범위와 지급 조건은 약관과 상품설명서를 확인해 주세요.</p>
               </div>
             </div>
-          </template>
+          </div>
 
+          <div v-if="isGenerating && !generatedScript?.designSummary" class="consultation-opening__loading" role="status">
+            <div class="loader"></div>
+            <span>설계 요약을 분석 중입니다. 통계 자료와 핵심 수치를 구성하고 있습니다.</span>
+          </div>
+          <div v-else-if="generatedScript?.designSummary" class="design-summary">
+            <div v-if="generatedScript.designSummary.highlights && generatedScript.designSummary.highlights.length" class="highlight-grid">
+              <div
+                v-for="(h, hi) in generatedScript.designSummary.highlights"
+                :key="hi"
+                class="highlight-card"
+              >
+                <div class="highlight-headline">{{ h.headline }}</div>
+                <div class="highlight-detail">{{ h.detail }}</div>
+                <div class="highlight-source">{{ h.source }}</div>
+              </div>
+            </div>
+
+            <details v-if="generatedScript.designSummary.statistics?.length" class="result-disclosure" open>
+              <summary class="result-disclosure__trigger">상담에 참고할 통계</summary>
+              <div class="stats-row">
+              <div
+                v-for="(stat, si) in generatedScript.designSummary.statistics"
+                :key="si"
+                class="stat-block"
+              >
+                <div class="stat-title">
+                  {{ stat.title }}
+                  <span v-if="stat.unit" class="stat-unit-label">{{ stat.unit }}</span>
+                </div>
+                <div v-if="stat.reason" class="stat-reason">{{ stat.reason }}</div>
+
+                <div class="stat-body">
+                  <div v-if="stat.chartType === 'bar' && stat.chartData" class="stat-chart">
+                    <div v-for="(item, ii) in stat.chartData" :key="ii" class="stat-bar-row">
+                      <div class="bar-header">
+                        <span class="bar-label">{{ item.label }}</span>
+                        <span class="bar-value">{{ formatNumber(item.value) }}</span>
+                      </div>
+                      <div class="bar-track">
+                        <div
+                          class="bar-fill"
+                          :style="{ width: barWidth(item, stat.chartData), background: barColor(ii) }"
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-else-if="stat.chartType === 'donut'" class="donut-wrapper">
+                    <svg viewBox="0 0 36 36" class="donut-svg">
+                      <circle class="donut-ring" cx="18" cy="18" r="15.9" fill="none" stroke="#e2e8f0" stroke-width="3.5"/>
+                      <circle
+                        class="donut-segment"
+                        cx="18" cy="18" r="15.9"
+                        fill="none"
+                        stroke="var(--primary-color)"
+                        stroke-width="3.5"
+                        :stroke-dasharray="`${stat.percent ?? 0} ${100 - (stat.percent ?? 0)}`"
+                        stroke-dashoffset="25"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                    <div class="donut-center">
+                      <div class="donut-center-label">{{ stat.centerLabel }}</div>
+                      <div class="donut-center-sub">{{ stat.centerSub }}</div>
+                    </div>
+                  </div>
+
+                  <div v-else-if="stat.chartType === 'comparison' && stat.chartData" class="comparison-chart">
+                    <div v-for="(item, ii) in stat.chartData" :key="ii" class="comparison-col">
+                      <div class="comparison-val">{{ formatNumber(item.value) }}</div>
+                      <div class="comparison-bar-outer">
+                        <div
+                          class="comparison-bar-inner"
+                          :style="{
+                            height: barWidth(item, stat.chartData),
+                            background: COMPARISON_COLORS[ii % COMPARISON_COLORS.length],
+                          }"
+                        ></div>
+                      </div>
+                      <div class="comparison-label">{{ item.label }}</div>
+                    </div>
+                  </div>
+
+                  <div class="stat-description">{{ stat.description || '' }}</div>
+                </div>
+
+                <div class="stat-source">출처: {{ stat.source }} · {{ stat.period }}</div>
+              </div>
+              </div>
+            </details>
+
+            <details v-if="generatedScript.designSummary.tips?.length || isGenerating" class="result-disclosure result-disclosure--tips">
+              <summary class="result-disclosure__trigger">영업 꿀팁<span v-if="isGenerating && !generatedScript.designSummary.tips?.length"> · 생성 중</span></summary>
+              <div class="summary-tips-block">
+              <div v-if="isGenerating && !generatedScript.designSummary.tips?.length" class="phase-loader">
+                <div class="loader"></div>
+                <span>영업 꿀팁을 생성 중입니다...</span>
+              </div>
+              <div
+                v-for="(tip, ti) in generatedScript.designSummary.tips"
+                :key="ti"
+                class="summary-tip-item"
+              >
+                {{ tip }}
+              </div>
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <p v-if="resultNeedsUpdate" class="result-update-notice" role="status">
+          선택 조건이 바뀌었습니다. 현재 상담 자료는 이전 조건의 결과입니다. ‘화법 업데이트’로 다시 생성해 주세요.
+        </p>
+
+        <div class="tabs" role="tablist" aria-label="상담 자료" @keydown="handleResultTabKeydown">
+          <button id="result-tab-script" type="button" role="tab" aria-controls="result-panel" :aria-selected="activeTab === 'script'" :tabindex="activeTab === 'script' ? 0 : -1" class="tab" :class="{ active: activeTab === 'script' }" @click="activeTab = 'script'">
+            특약별 화법
+          </button>
+          <button id="result-tab-points" type="button" role="tab" aria-controls="result-panel" :aria-selected="activeTab === 'points'" :tabindex="activeTab === 'points' ? 0 : -1" class="tab" :class="{ active: activeTab === 'points' }" @click="activeTab = 'points'">
+            예상 Q&A
+          </button>
+        </div>
+
+        <div id="result-panel" role="tabpanel" :aria-labelledby="`result-tab-${activeTab}`" tabindex="0" :aria-busy="isGenerating ? 'true' : 'false'">
+        <div v-if="generatedScript" class="script-box">
           <template v-if="activeTab === 'script'">
-            <div v-if="isGenerating && !generatedScript.riderScripts.length" class="phase-loader">
+            <div v-if="isGenerating && !firstScriptPageReady" class="phase-loader">
               <div class="loader"></div>
               <span>특약별 화법을 생성 중입니다...</span>
             </div>
 
-            <div v-if="generatedScript.riderScripts.length" class="scripts-wrap">
-              <div class="scripts-panel-header" @click="showScriptsPanel = !showScriptsPanel">
-                <span>특약별 화법 상세보기</span>
-                <span class="toggle-arrow">{{ showScriptsPanel ? '▲' : '▼' }}</span>
+            <div v-if="firstScriptPageReady && (visibleRiderScripts.length || hasMoreScriptPages)" class="scripts-wrap">
+              <div class="scripts-list-heading">
+                <div>
+                  <h2>특약별 화법 상세보기</h2>
+                </div>
+                <span class="scripts-list-heading__count">{{ scriptTotalCount || generatedScript.riderScripts.length }}건</span>
               </div>
 
-              <div v-if="showScriptsPanel">
+              <section
+                v-for="(rs, index) in visibleRiderScripts"
+                :key="rs.jar_rd_code || rs.name"
+                class="script-accordion-item"
+                :class="{ open: expandedScriptNames.includes(rs.name) }"
+              >
+                <h3 class="script-accordion-heading">
+                  <button
+                    :id="scriptTriggerId(index)"
+                    type="button"
+                    class="script-accordion-trigger"
+                    :aria-expanded="expandedScriptNames.includes(rs.name) ? 'true' : 'false'"
+                    :aria-controls="scriptPanelId(index)"
+                    @click="toggleScript(rs.name)"
+                  >
+                    <span class="script-accordion-trigger__number">{{ index + 1 }}</span>
+                    <span class="script-accordion-trigger__name">{{ rs.name }}</span>
+                    <span class="script-accordion-trigger__action">
+                      <span class="script-accordion-trigger__label">{{ expandedScriptNames.includes(rs.name) ? '접기' : '화법 보기' }}</span>
+                      <svg
+                        class="script-accordion-trigger__chevron"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      ><path d="m6 10 6 6 6-6"/></svg>
+                    </span>
+                  </button>
+                </h3>
+
                 <div
-                  v-for="(rs, index) in generatedScript.riderScripts"
-                  :key="index"
-                  class="qna-section scripts-section"
+                  v-if="expandedScriptNames.includes(rs.name)"
+                  :id="scriptPanelId(index)"
+                  class="script-accordion-panel"
+                  role="region"
+                  :aria-labelledby="scriptTriggerId(index)"
                 >
                   <div class="qna-tag-row">
-                    <span class="qna-rider-tag">{{ rs.name }}</span>
                     <button
+                      type="button"
                       class="qna-claim-btn"
                       :class="{ open: expandedDescNames.includes(rs.name) }"
+                      :aria-expanded="expandedDescNames.includes(rs.name) ? 'true' : 'false'"
+                      :aria-controls="scriptDescriptionId(index)"
                       @click="toggleDesc(rs.name)"
                     >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                      {{ expandedDescNames.includes(rs.name) ? '지급사유 닫기' : '지급사유 보기' }}
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      <span>지급사유<span class="script-claim-action-label"> {{ expandedDescNames.includes(rs.name) ? '닫기' : '보기' }}</span></span>
                       <svg
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
                         :style="{ transform: expandedDescNames.includes(rs.name) ? 'rotate(180deg)' : 'rotate(0deg)', transition: '0.2s' }"
                       ><polyline points="6 9 12 15 18 9"/></svg>
                     </button>
                   </div>
 
-                  <div v-if="expandedDescNames.includes(rs.name)" class="qna-claim-detail">
-                    {{ formatDesc(selectedDataFull.find((r) => r.name === rs.name)?.description ?? '지급사유 정보가 없습니다.') }}
-                  </div>
+                  <div
+                    v-if="expandedDescNames.includes(rs.name)"
+                    :id="scriptDescriptionId(index)"
+                    class="qna-claim-detail"
+                    v-html="claimHtml(rs.name)"
+                  ></div>
 
                   <div class="script-talk-block">{{ rs.talk }}</div>
-
-                  <hr v-if="index < generatedScript.riderScripts.length - 1" class="qna-divider" />
                 </div>
+              </section>
+
+              <!-- 다음 9개가 준비됐으면 "더보기"(선택 화면의 .rider-load-more 재사용),
+                   아직이면 같은 자리에 상단과 같은 로딩(동그라미 + "특약별 화법을 생성 중입니다...") -->
+              <button
+                v-if="hasMoreScriptPages && isNextScriptPageReady"
+                type="button"
+                class="rider-load-more"
+                @click="scriptRevealedPages++"
+              >
+                <span>더보기</span>
+              </button>
+              <div v-else-if="hasMoreScriptPages" class="phase-loader">
+                <div class="loader"></div>
+                <span>특약별 화법을 생성 중입니다...</span>
               </div>
             </div>
           </template>
@@ -629,6 +1501,9 @@ async function generateSalesTalk() {
                   <span class="qna-rider-tag">{{ group.rider }}</span>
                   <button
                     class="qna-claim-btn"
+                    type="button"
+                    :aria-expanded="expandedClaimNames.includes(group.rider) ? 'true' : 'false'"
+                    :aria-controls="`qna-claim-${gi}`"
                     :class="{ open: expandedClaimNames.includes(group.rider) }"
                     @click="toggleClaim(group.rider)"
                   >
@@ -641,9 +1516,11 @@ async function generateSalesTalk() {
                   </button>
                 </div>
 
-                <div v-if="expandedClaimNames.includes(group.rider)" class="qna-claim-detail">
-                  {{ formatDesc(selectedDataFull.find((r) => r.name === group.rider)?.description ?? '지급사유 정보가 없습니다.') }}
-                </div>
+                <div
+                  v-if="expandedClaimNames.includes(group.rider)"
+                  :id="`qna-claim-${gi}`" class="qna-claim-detail"
+                  v-html="claimHtml(group.rider)"
+                ></div>
 
                 <div v-for="(item, ii) in group.items" :key="ii" class="qna-block">
                   <div class="qna-question">Q{{ ii + 1 }}. {{ item.q }}</div>
@@ -658,27 +1535,27 @@ async function generateSalesTalk() {
             </div>
           </template>
         </div>
+        </div>
       </main>
 
-      <!-- ResultSidebar -->
       <aside class="sidebar">
-        <button class="back-btn desktop-only" @click="currentStep = 'selection'">← 메인 선택화면으로</button>
+        <button class="back-btn desktop-only" @click="handleBackToSelection">← 메인 선택화면으로</button>
 
         <div class="card desktop-only">
           <div class="card-title">고객 프로파일</div>
           <div class="profile-compact-grid">
             <div class="profile-compact-item">
               <div class="label-small">나이/성별</div>
-              <div class="value-small">{{ profile.age }} {{ profile.gender }}</div>
+              <div class="value-small">{{ filters.age }} {{ filters.gender }}</div>
             </div>
             <div class="profile-compact-item" style="grid-column: span 2">
               <div class="label-small">특이사항</div>
-              <div class="value-small">{{ profile.notes || '없음' }}</div>
+              <div class="value-small">{{ filters.notes || '없음' }}</div>
             </div>
           </div>
         </div>
 
-        <div class="card" style="flex: 1; display: flex; flex-direction: column; min-height: 0; margin-bottom: 0;">
+        <div class="card rider-edit-card">
           <div class="card-title">
             특약 추가/수정 <span>{{ selectedRiders.length }}개</span>
           </div>
@@ -686,48 +1563,69 @@ async function generateSalesTalk() {
           <div class="chips-sidebar">
             <div v-for="rider in selectedDataFull" :key="rider.id" class="chip-sidebar">
               {{ rider.name }}
-              <span class="chip-remove-sidebar" @click="removeRider(rider.id)">&times;</span>
+              <button type="button" class="chip-remove-sidebar" :aria-label="`${rider.name} 선택 해제`" @click="removeRider(rider.id)">&times;</button>
             </div>
           </div>
 
-          <div class="sidebar-search-container">
+          <div ref="sidebarComboboxRoot" class="sidebar-search-container sidebar-combobox">
             <input
+              ref="sidebarSearchInput"
               class="sidebar-search-input"
-              placeholder="특약 검색 및 추가..."
+              placeholder="특약 검색 및 추가"
               v-model="sidebarSearchTerm"
+              role="combobox"
+              aria-label="추가할 특약 검색"
+              aria-autocomplete="list"
+              aria-haspopup="listbox"
+              :aria-expanded="sidebarComboboxOpen ? 'true' : 'false'"
+              :aria-controls="sidebarListboxId"
+              :aria-activedescendant="sidebarActiveOptionId"
+              autocomplete="off"
+              :spellcheck="false"
+              @focus="openSidebarCombobox"
+              @input="handleSidebarSearchInput"
+              @keydown="handleSidebarSearchKeydown"
+              @blur="handleSidebarSearchBlur"
+              @compositionstart="sidebarComposing = true"
+              @compositionend="sidebarComposing = false; handleSidebarSearchInput()"
             />
-          </div>
+            <span class="sr-only" role="status" aria-live="polite">{{ sidebarSearchStatus }}</span>
 
-          <div class="rider-list-sidebar">
-            <div v-for="[category, items] in filteredGroupedRiders" :key="category">
-              <div class="rider-category-header">{{ category }}</div>
-              <div
-                v-for="rider in items"
-                :key="rider.id"
-                class="rider-item-sidebar"
-                :class="{ selected: selectedRiders.includes(rider.id) }"
+            <div v-if="sidebarComboboxOpen" class="sidebar-search-popover">
+              <ul
+                v-if="sidebarCandidateRiders.length > 0"
+                :id="sidebarListboxId"
+                ref="sidebarListbox"
+                class="sidebar-search-listbox"
+                role="listbox"
+                aria-label="추가할 특약"
               >
-                <div class="sidebar-item-left">
-                  <input
-                    type="checkbox"
-                    :checked="selectedRiders.includes(rider.id)"
-                    @click.stop="toggleRider(rider.id)"
-                  />
-                  <div class="sidebar-badge-stack">
-                    <span v-if="rider.badge === 'popular'" class="badge popular">인기</span>
-                    <span v-if="rider.badge === 'ai'" class="badge ai">AI추천</span>
-                  </div>
-                </div>
-                <span class="rider-name-sidebar" @click="toggleRider(rider.id)" style="flex: 1; margin-top: 2px;">
-                  {{ rider.name }}
-                </span>
-              </div>
+                <li
+                  v-for="(rider, index) in sidebarCandidateRiders"
+                  :id="sidebarOptionId(rider)"
+                  :key="rider.id"
+                  class="sidebar-search-option"
+                  :class="{ active: index === sidebarActiveIndex }"
+                  role="option"
+                  aria-selected="false"
+                  @mouseenter="sidebarActiveIndex = index"
+                  @mousedown.prevent
+                  @click="addSidebarRider(rider)"
+                >
+                  <span class="sidebar-search-option__name">{{ rider.name }}</span>
+                  <span v-if="rider.badge === 'popular'" class="badge popular">인기</span>
+                  <span v-if="rider.badge === 'ai'" class="badge ai">AI추천</span>
+                </li>
+              </ul>
+              <p v-else :id="sidebarListboxId" class="sidebar-search-empty" role="status">
+                일치하는 특약이 없습니다.
+              </p>
             </div>
           </div>
 
           <button
             class="sidebar-update-btn"
-            @click="generateSalesTalk"
+            @click="submitFilter"
             :disabled="isGenerating || selectedRiders.length === 0"
           >
             {{ isGenerating ? '분석 중...' : '변경된 내용으로 화법 업데이트' }}
@@ -739,15 +1637,8 @@ async function generateSalesTalk() {
   </div>
 </template>
 
-<style scoped>
-/* ============================================================
-   보험피터(코칭트랙) 전용 스타일
-   원본: Channel_AI_Solution-Coaching_track/frontend/assets/styles/coaching-track.css
-   변경점: 전역(:root, body, *) 선택자를 이 페이지의 루트 요소인 .app-root
-   기준으로 옮겨, scoped 스타일 범위 안에서만 적용되도록 격리했습니다.
-   (Vue의 scoped 스타일은 컴포넌트가 렌더링한 요소에만 속성 선택자를
-   붙이기 때문에, 사이트 전역 body/：root 규칙과 절대 충돌하지 않습니다.)
-   ============================================================ */
+<style lang="scss" scoped>
+
 .app-root {
   --primary-color: #2563eb;
   --bg-color: #f5f7ff;
@@ -759,11 +1650,10 @@ async function generateSalesTalk() {
   --green-section: #1b8d57;
   --orange-section: #f5a623;
   --selection-bg: #eef2ff;
-
   position: fixed;
   inset: 0;
   height: 100vh;
-  height: 100dvh; /* iOS Safari: 주소창 포함 계산 버그 방지 */
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -772,7 +1662,6 @@ async function generateSalesTalk() {
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
   z-index: 500;
 }
-
 * {
   margin: 0;
   padding: 0;
@@ -780,59 +1669,8 @@ async function generateSalesTalk() {
 }
 
 .header {
-  height: 50px;
-  background: white;
-  border-bottom: 1px solid var(--border-color);
   display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 12px;
-  padding: 0 24px;
   font-weight: 700;
-  font-size: 1rem;
-  z-index: 10;
-}
-
-.logo {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  flex: 1;
-}
-.logo-main {
-  font-size: 1.1rem;
-  font-weight: 900;
-  color: #0f172a;
-  letter-spacing: -0.03em;
-}
-.logo-sub {
-  font-size: 0.7rem;
-  font-weight: 400;
-  color: #94a3b8;
-  letter-spacing: 0.01em;
-}
-
-.logo-tagline {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: #2563eb;
-  margin-left: 10px;
-  padding-left: 10px;
-  border-left: 2px solid #bfdbfe;
-  letter-spacing: -0.01em;
-}
-
-.header-test-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.header-back-btn {
-  margin: 0;
-  padding: 6px 14px;
-  font-size: 13px;
 }
 
 .container {
@@ -842,34 +1680,17 @@ async function generateSalesTalk() {
   overflow: hidden;
 }
 
-/* Common Card Styles */
 .card {
   background: white;
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  margin-bottom: 12px;
-  padding: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .card-title {
-  font-size: 13px;
-  font-weight: 700;
-  margin-bottom: 8px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: #334155;
+  @include flexbox(space-between, center);
 }
 
-/* === Selection View (Full Screen) === */
 .selection-view {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16px 24px;
-  overflow-y: auto;
-  max-width: 1400px;
   margin: 0 auto;
   width: 100%;
 }
@@ -877,366 +1698,61 @@ async function generateSalesTalk() {
 .selection-header-section {
   display: flex;
   align-items: stretch;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.selection-header-section .card {
-  flex: 1;
-  margin-bottom: 0;
-  padding: 8px 12px;
-}
-
-.profile-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.profile-field {
-  flex: 1;
-  position: relative;
-}
-
-.profile-field-btn {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 7px 12px;
-  border-radius: 8px;
-  background: #f5f8ff;
-  border: 1px solid #dde5f5;
-  cursor: pointer;
-  transition: all 0.15s;
-  gap: 2px;
-}
-
-.profile-field-btn:hover,
-.profile-field.open .profile-field-btn {
-  border-color: #2563eb;
-  background: #eff6ff;
-}
-
-.field-label {
-  font-size: 9px;
-  font-weight: 700;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.field-value {
-  font-size: 13px;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.field-arrow {
-  font-size: 10px;
-  color: #94a3b8;
-  margin-left: 2px;
-}
-
-.field-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #dde5f5;
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  z-index: 100;
-}
-
-.dropdown-opt {
-  padding: 8px 12px;
-  border-radius: 7px;
-  border: none;
-  background: transparent;
-  font-size: 13px;
-  font-weight: 600;
-  color: #334155;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.1s;
-}
-
-.dropdown-opt:hover {
-  background: #f0f4ff;
-  color: #2563eb;
-}
-
-.dropdown-opt.active {
-  background: #2563eb;
-  color: white;
+  gap: rem(12);
+  margin-bottom: rem(16);
+  .card {
+    flex: 1;
+    margin-bottom: 0;
+    padding: rem(8) rem(12);
+  }
 }
 
 .profile-notes-row {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 7px 12px;
-  border-radius: 8px;
-  background: #f5f8ff;
-  border: 1px solid #dde5f5;
 }
 
 .notes-input {
   border: none;
   background: transparent;
-  font-size: 13px;
-  font-weight: 500;
-  color: #1e293b;
   outline: none;
   width: 100%;
-}
-
-.notes-input::placeholder {
-  color: #94a3b8;
-  font-weight: 400;
-}
-
-.profile-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 99;
-}
-
-.chip-divider {
-  width: 1px;
-  height: 28px;
-  background: #e2e8f0;
-  margin: 0 2px;
-  flex-shrink: 0;
-}
-
-.label-large {
-  font-size: 8px;
-  color: var(--text-muted);
-  margin-bottom: 0px;
-}
-
-.search-bar-large {
-  flex: 1;
-  background: white;
-  border: 1px solid var(--border-color);
-  padding: 10px 16px;
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.search-top-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.badge-filter-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.selected-only-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #2563eb;
-  cursor: pointer;
-  white-space: nowrap;
-  user-select: none;
-}
-
-.badge-filter-toggle {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  user-select: none;
-  padding: 3px 8px;
-  border-radius: 20px;
-  border: 1px solid;
-}
-.popular-toggle {
-  color: #be185d;
-  border-color: #f9a8d4;
-  background: #fdf2f8;
-}
-.popular-toggle input:checked ~ span { color: #9d174d; }
-.ai-toggle {
-  color: #1d4ed8;
-  border-color: #93c5fd;
-  background: #eff6ff;
-}
-.ai-toggle input:checked ~ span { color: #1e40af; }
-.badge-filter-toggle input[type='checkbox'] {
-  width: 13px;
-  height: 13px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.popular-toggle input[type='checkbox'] { accent-color: #f59e0b; }
-.ai-toggle    input[type='checkbox'] { accent-color: #7c3aed; }
-
-.selected-only-toggle input[type='checkbox'] {
-  width: 15px;
-  height: 15px;
-  accent-color: #2563eb;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.search-input-large {
-  flex: 1;
-  padding: 6px 0;
-  border: none;
-  font-size: 14px;
-  outline: none;
-}
-
-/* Category Tabs (Horizontal Scroll) */
-.selected-view-bar {
-  padding: 6px 0 8px 0;
-}
-
-.selected-view-btn {
-  padding: 5px 14px;
-  border-radius: 20px;
-  border: 1px solid #dde5f5;
-  background: white;
-  font-size: 12px;
-  font-weight: 600;
-  color: #2563eb;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.selected-view-btn:hover {
-  background: #eff6ff;
-  border-color: #2563eb;
-}
-
-.selected-view-btn.active {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: white;
+  &::placeholder {
+    font-weight: 400;
+  }
 }
 
 .category-pills-wrap {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px 0 14px 0;
 }
 
 .cat-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 13px;
-  border-radius: 20px;
-  border: 1.5px solid #dde5f5;
-  background: white;
-  font-size: 13px;
-  font-weight: 600;
-  color: #475569;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s;
+  &:hover {
+    background: #eff6ff;
+  }
 }
-
-.cat-pill:hover {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
-  background: #eff6ff;
-}
-
-.cat-pill.active {
-  background: var(--primary-color);
-  border-color: var(--primary-color);
-  color: white;
-}
-
-.cat-count {
-  font-size: 11px;
-  font-weight: 500;
-  background: rgba(0, 0, 0, 0.07);
-  padding: 1px 6px;
-  border-radius: 10px;
-}
-
-.cat-pill.active .cat-count {
-  background: rgba(255, 255, 255, 0.25);
-  color: white;
-}
-
 
 .rider-grid-large {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px;
-  padding-bottom: 80px;
 }
 
 .rider-card-large {
-  background: white;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 8px 10px;
   cursor: pointer;
-  transition: all 0.15s;
-  display: flex;
   flex-direction: column;
-  gap: 4px;
   position: relative;
-  min-height: 64px;
-}
-
-.rider-card-large:hover {
-  border-color: var(--primary-color);
-  background: #f8fafc;
-}
-
-.rider-card-large.selected {
-  background: var(--selection-bg);
-  border-color: var(--primary-color);
+  &:hover {
+    background: #f8fafc;
+  }
 }
 
 .rider-card-header {
-  display: flex;
   justify-content: space-between;
   align-items: center;
-  width: 100%;
-}
-
-.rider-name-large {
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.4;
-  color: #1e293b;
-  word-break: break-all;
-  overflow-wrap: break-word;
-}
-
-.badge-container {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 6px;
 }
 
 .badge {
@@ -1244,422 +1760,155 @@ async function generateSalesTalk() {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1;
   white-space: nowrap;
-}
-
-.badge.popular {
-  background: #fff0f6;
-  color: #eb2f96;
-}
-
-.badge.ai {
-  background: #e6f7ff;
-  color: #1890ff;
-}
-
-.rider-checkbox-large {
-  width: 18px;
-  height: 18px;
-  margin-top: 1px;
-}
-
-.rider-list-header {
-  display: flex;
-  align-items: center;
-  padding: 6px 0 4px 0;
-}
-
-.selected-count-badge {
-  background: #2563eb;
-  color: white;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
+  &.popular {
+    background: #fff0f6;
+    color: #eb2f96;
+  }
 }
 
 .selection-footer {
   position: sticky;
   bottom: 0;
-  background: rgba(245, 247, 255, 0.95);
-  backdrop-filter: blur(8px);
-  padding: 8px 0;
-  border-top: 1px solid var(--border-color);
   display: flex;
-  justify-content: center;
   align-items: center;
   z-index: 5;
 }
 
 .main-generate-btn {
-  padding: 12px 50px;
-  font-size: 16px;
-  font-weight: 800;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 24px;
   cursor: pointer;
 }
 
-/* === Result View === */
 .sidebar {
-  width: 360px;
-  padding: 16px;
   overflow-y: auto;
-  border-right: 1px solid var(--border-color);
-  background: #fcfcfc;
   display: flex;
   flex-direction: column;
 }
 
+// 결과 화면 상단 "특약 N건 + 전체보기" 줄과 그 아래 특약 목록 숨김
+.summary-riders,
+#summary-rider-list {
+  display: none !important;
+}
+
 .back-btn {
-  background: white;
-  border: 1px solid #ddd;
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-size: 14px;
   cursor: pointer;
-  margin-bottom: 16px;
-  color: #334155;
+  margin-bottom: rem(16);
   font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  @include flexbox(center, center);
+  gap: rem(8);
 }
 
 .profile-compact-grid {
-  display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
 }
 
 .profile-compact-item {
   font-size: 12px;
-  background: #f8fafc;
-  padding: 8px 10px;
   border-radius: 6px;
-  border: 1px solid #eee;
 }
 
-.label-small { font-size: 10px; color: #94a3b8; margin-bottom: 2px; }
-.value-small { font-weight: 700; font-size: 13px; color: #1e293b; line-height: 1.3; }
+.label-small {
+  margin-bottom: rem(2);
+}
+
+.value-small {
+  font-weight: 700;
+  line-height: 1.3;
+}
 
 .content {
   flex: 1;
-  padding: 20px 24px;
   overflow-y: auto;
   background: white;
 }
 
 .tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
   border-bottom: 1px solid #eee;
 }
 
 .tab {
-  padding: 12px 20px;
   cursor: pointer;
-  border-bottom: 3px solid transparent;
-  font-size: 15px;
-  color: #64748b;
+  &.active {
+    font-weight: 800;
+  }
 }
-
-.tab.active { color: var(--primary-color); border-color: var(--primary-color); font-weight: 800; }
 
 .script-box {
   background: white;
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
   overflow: hidden;
 }
 
-.section { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; }
-.section.blue { border-left: 6px solid var(--blue-section); }
-.section.green { border-left: 6px solid var(--green-section); }
-.section.orange { border-left: 6px solid var(--orange-section); }
-.section.purple { border-left: 6px solid #8b5cf6; }
-
-.section-title { font-size: 14px; font-weight: 800; color: var(--text-muted); margin-bottom: 12px; }
-.section-content { line-height: 1.8; font-size: 18px; color: #0f172a; white-space: pre-wrap; font-weight: 500; }
-
-.rider-list-sidebar {
-  flex: 1;
-  overflow-y: auto;
-  border: 1px solid #eee;
-  border-radius: 8px;
-  background: white;
-}
-
-.rider-item-sidebar {
-  padding: 12px 14px;
-  border-bottom: 1px solid #eee;
-  cursor: pointer;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  font-size: 14px;
-  transition: background 0.15s;
-}
-
-.sidebar-item-left {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  width: 36px;
-}
-
-.sidebar-badge-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sidebar-badge-stack .badge {
-  font-size: 8.5px;
-  padding: 2px 4px;
-  min-width: 32px;
-  justify-content: center;
-  transform: scale(0.95);
-}
-
-.rider-name-sidebar {
-  flex: 1;
-  line-height: 1.5;
-  margin-top: 1px;
-  color: #334155;
-  font-weight: 600;
-}
-
 .sidebar-search-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
   outline: none;
 }
 
 .sidebar-update-btn {
   width: 100%;
-  background: #334155;
   color: white;
   border: none;
-  padding: 14px;
-  border-radius: 8px;
-  font-weight: 800;
-  font-size: 15px;
-  margin-top: 12px;
+  margin-top: rem(12);
 }
 
 .chips-sidebar {
-  display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
-  max-height: 100px;
-  overflow-y: auto;
 }
 
 .chip-sidebar {
-  background: #e8f1ff;
-  color: var(--primary-color);
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 4px;
   display: flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: 600;
+  gap: rem(4);
 }
 
 .chip-remove-sidebar {
   cursor: pointer;
-  font-size: 16px;
-}
-
-.scripts-wrap {
-  padding: 0;
-}
-
-.scripts-panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 20px;
-  background: #dbeafe;
-  border-top: 1px solid #bfdbfe;
-  border-bottom: 1px solid #bfdbfe;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 800;
-  color: #1e40af;
-  letter-spacing: 0.08em;
-  user-select: none;
-  text-transform: uppercase;
-}
-
-.scripts-panel-header:hover {
-  background: #bfdbfe;
-}
-
-.scripts-section {
-  padding-top: 14px;
-  padding-bottom: 4px;
-}
-
-.toggle-arrow {
-  font-size: 12px;
-  color: #94a3b8;
 }
 
 .script-talk-block {
-  font-size: 14px;
-  color: #374151;
-  line-height: 1.8;
-  border-left: 3px solid #d1d5db;
-  padding-left: 14px;
-  margin-bottom: 10px;
+  margin-bottom: rem(10);
   word-break: keep-all;
-}
-
-.rider-desc-toggle:hover {
-  color: var(--primary-color);
-  background: #e2e8f0;
-}
-
-.rider-desc-content {
-  font-size: 15px;
-  color: #334155;
-  background: #f8fafc;
-  padding: 12px;
-  border-radius: 6px;
-  margin-top: 8px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-  border-left: 3px solid #cbd5e1;
-}
-
-/* === Design Summary === */
-.design-summary {
-  border-bottom: 4px solid #f1f5f9;
-  background: #f8fafc;
 }
 
 .summary-header {
-  padding: 14px 20px 10px;
-  font-size: 13px;
-  font-weight: 800;
-  color: #64748b;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   border-bottom: 1px solid #e2e8f0;
-}
-
-.highlight-grid {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 10px;
-  padding: 16px 20px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
 }
 
 .highlight-card {
-  flex: 1;
   min-width: 0;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-top: 3px solid #3b82f6;
-  border-radius: 10px;
-  padding: 14px 12px;
-  text-align: center;
   overflow: hidden;
-}
-.highlight-card:nth-child(2) { border-top-color: #6366f1; }
-.highlight-card:nth-child(3) { border-top-color: #0891b2; }
-
-.highlight-icon {
-  font-size: 22px;
-  margin-bottom: 6px;
 }
 
 .highlight-headline {
-  font-size: 16px;
-  font-weight: 800;
-  color: #1e293b;
-  line-height: 1.25;
-  margin-bottom: 6px;
+  margin-bottom: rem(6);
   word-break: keep-all;
 }
 
 .highlight-detail {
-  font-size: 11px;
-  color: #475569;
-  line-height: 1.5;
-  margin-bottom: 6px;
+  margin-bottom: rem(6);
   word-break: keep-all;
 }
 
-.highlight-source {
-  font-size: 10px;
-  color: #94a3b8;
-}
-
-.stats-row {
-  padding: 16px 20px;
-  border-bottom: 1px solid #e2e8f0;
-}
-
 .stat-block {
-  background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 16px;
 }
 
 .stat-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 8px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: rem(6);
   flex-wrap: wrap;
 }
 
 .stat-unit-label {
-  font-size: 10px;
   font-weight: 500;
-  color: #64748b;
-  background: #e2e8f0;
-  padding: 2px 6px;
+  padding: rem(2) rem(6);
   border-radius: 4px;
 }
 
 .stat-reason {
-  font-size: 12px;
-  color: #1d4ed8;
-  background: #eff6ff;
-  border-left: 3px solid #3b82f6;
-  padding: 7px 12px;
-  border-radius: 0 6px 6px 0;
-  margin-bottom: 14px;
-  line-height: 1.55;
+  margin-bottom: rem(14);
   word-break: keep-all;
 }
 
@@ -1667,31 +1916,25 @@ async function generateSalesTalk() {
   display: flex;
   flex-direction: column;
   justify-content: space-evenly;
-  gap: 8px;
+  gap: rem(8);
 }
 
 .stat-bar-row {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-
-.stat-bar-row:last-child {
-  margin-bottom: 0;
+  gap: rem(4);
+  margin-bottom: rem(8);
+  &:last-child {
+    margin-bottom: 0;
+  }
 }
 
 .bar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
+  @include flexbox(space-between, baseline);
+  gap: rem(8);
 }
 
 .bar-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #334155;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1699,79 +1942,41 @@ async function generateSalesTalk() {
 }
 
 .bar-value {
-  font-size: 12px;
-  color: #1e293b;
-  font-weight: 700;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .bar-track {
-  height: 8px;
-  background: #e2e8f0;
-  border-radius: 10px;
   overflow: hidden;
   width: 100%;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 10px;
   transition: width 0.6s ease;
-}
-
-.bar-unit {
-  font-size: 10px;
-  font-weight: 400;
-  color: #94a3b8;
 }
 
 .stat-body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-items: stretch;
-  gap: 16px;
-  margin-bottom: 4px;
-}
-
-.stat-body > .stat-chart,
-.stat-body > .donut-wrapper,
-.stat-body > .comparison-chart {
-  width: 100%;
-  min-width: 0;
+  gap: rem(16);
+  margin-bottom: rem(4);
+  > .stat-chart,
+  > .donut-wrapper,
+  > .comparison-chart {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 .stat-description {
-  font-size: 12px;
-  color: #374151;
-  line-height: 1.75;
-  border-left: 3px solid #d1d5db;
-  padding-left: 14px;
   word-break: keep-all;
 }
 
-.stat-source {
-  font-size: 11px;
-  color: #94a3b8;
-  margin-top: 10px;
-}
-
-.stat-source-link {
-  color: #94a3b8;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.stat-source-link:hover {
-  color: #2563eb;
-}
-
-/* Donut chart */
 .donut-wrapper {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @include flexbox(center, center);
   width: 100%;
   min-height: 100px;
 }
@@ -1790,27 +1995,20 @@ async function generateSalesTalk() {
 }
 
 .donut-center-label {
-  font-size: 17px;
   font-weight: 800;
-  color: #1e293b;
   line-height: 1;
 }
 
 .donut-center-sub {
-  font-size: 9px;
-  color: #64748b;
-  margin-top: 3px;
+  margin-top: rem(3);
   white-space: pre-line;
   line-height: 1.4;
 }
 
-/* Comparison chart */
 .comparison-chart {
-  display: flex;
-  justify-content: center;
-  gap: 28px;
-  padding: 8px 0 4px;
-  align-items: flex-end;
+  @include flexbox(center, flex-end);
+  gap: rem(28);
+  padding: rem(8) 0 rem(4);
   min-height: 100px;
 }
 
@@ -1818,20 +2016,17 @@ async function generateSalesTalk() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  gap: rem(5);
   width: 60px;
 }
 
 .comparison-val {
-  font-size: 14px;
   font-weight: 800;
-  color: #1e293b;
 }
 
 .comparison-bar-outer {
   width: 36px;
   height: 90px;
-  background: #e2e8f0;
   border-radius: 6px 6px 0 0;
   display: flex;
   align-items: flex-end;
@@ -1846,100 +2041,39 @@ async function generateSalesTalk() {
 }
 
 .comparison-label {
-  font-size: 12px;
   font-weight: 600;
-  color: #475569;
 }
 
-.summary-intro-block {
-  padding: 16px 20px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f0fdf4;
+.loader-container {
+  padding: rem(60) 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: rem(16);
 }
 
-.summary-tips-block {
-  padding: 16px 20px;
-  background: #faf5ff;
+.loader {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0; // 좁은 화면에서 옆 문구가 줄바꿈될 때 찌그러져 타원이 되지 않도록
+  display: inline-block;
+  border: 3px solid #e2e8f0;
+  border-radius: 50%;
+  animation: coaching-track-spin 0.8s linear infinite;
 }
-
-.summary-block-title {
-  font-size: 13px;
-  font-weight: 800;
-  color: #1e293b;
-  margin-bottom: 10px;
-}
-
-.summary-intro-text {
-  font-size: 15px;
-  line-height: 1.9;
-  color: #0f172a;
-  white-space: pre-wrap;
-  font-weight: 500;
-}
-
-.summary-tip-item {
-  font-size: 14px;
-  line-height: 1.7;
-  color: #374151;
-  padding: 6px 0 6px 16px;
-  border-left: 3px solid #a78bfa;
-  margin-bottom: 8px;
-}
-
-.loader-container { padding: 60px 0; display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.loader { width: 28px; height: 28px; display: inline-block; border: 3px solid #e2e8f0; border-top-color: var(--primary-color); border-radius: 50%; animation: coaching-track-spin 0.8s linear infinite; }
 @keyframes coaching-track-spin { to { transform: rotate(360deg); } }
 
 .phase-loader {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 20px 24px;
-  color: #64748b;
-  font-size: 14px;
+  gap: rem(10);
   border-bottom: 1px solid #f1f5f9;
 }
 
-.elapsed-test {
-  font-size: 12px;
-  font-weight: 700;
-  color: #1e5eff;
-  padding: 4px 8px;
-  background: #eff6ff;
-  border-radius: 6px;
+.mobile-top-summary {
+  display: none;
 }
 
-.llm-elapsed {
-  color: #7c3aed;
-  background: #f5f3ff;
-}
-
-.model-used {
-  color: #0369a1;
-  background: #e0f2fe;
-  font-weight: 600;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.model-select-test {
-  font-size: 12px;
-  padding: 4px 8px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #f8fafc;
-  color: #475569;
-  cursor: pointer;
-  outline: none;
-}
-
-.mobile-top-summary { display: none; }
-
-/* ==========================================================================
-   Mobile Responsive Design (max-width: 850px)
-   ========================================================================== */
 @media (max-width: 850px) {
   .app-root {
     height: auto;
@@ -1947,348 +2081,140 @@ async function generateSalesTalk() {
     min-height: 100dvh;
     overflow-y: auto;
   }
-
-  .header {
-    height: auto;
-    min-height: 44px;
-    padding: 8px 12px;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .logo-main {
-    font-size: 13px;
-  }
-
-  .header-back-btn {
-    font-size: 12px;
-    padding: 5px 10px;
-    order: 2;
-  }
-
-  .header-test-controls {
-    order: 3;
-    width: 100%;
-    margin-left: 0;
-    gap: 6px;
-  }
-
-  .model-select-test {
-    font-size: 11px;
-    padding: 2px 4px;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .elapsed-test {
-    font-size: 11px;
-    padding: 2px 6px;
-    flex-shrink: 0;
-  }
-
   .container {
     flex-direction: column;
     height: auto;
     overflow: visible;
   }
-
-  /* --- Step 1: Selection View --- */
-  .selection-view {
-    padding: 16px;
-    overflow-y: visible;
-  }
-
   .selection-header-section {
     flex-direction: column;
-    gap: 12px;
+    gap: rem(12);
+    .card {
+      width: 100%;
+    }
   }
-
-  .selection-header-section .card {
-    width: 100%;
-  }
-
-  .profile-row {
-    flex-direction: column;
-  }
-
-  .rider-grid-large {
-    grid-template-columns: 1fr; /* Single column on mobile */
-  }
-
   .selection-footer {
     flex-direction: column;
-    padding: 8px 16px;
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
-    gap: 6px;
+    gap: rem(6);
     position: fixed;
     bottom: 0;
-    width: 100%;
     left: 0;
-    background: rgba(245, 247, 255, 0.97);
-    backdrop-filter: blur(10px);
     box-shadow: 0 -4px 15px rgba(37,99,235,0.1);
     z-index: 100;
   }
-
-  .main-generate-btn {
-    width: 100%;
-    padding: 14px;
-    font-size: 16px;
-    border-radius: 8px; /* Make it look more like a mobile button */
-  }
-
-  /* Provide padding at the bottom of the main content so the fixed footer doesn't hide items */
   .selection-main-grid {
-    padding-bottom: 140px;
+    padding-bottom: rem(140);
   }
-
-
-  /* --- Step 2: Result View --- */
-
-  /* Show Mobile Summary at top */
-  .mobile-top-summary {
-    display: block !important;
-    background: white;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .mobile-summary-profile {
-    font-size: 13px;
-    color: #334155;
-    margin-bottom: 8px;
-  }
-
-  .mobile-summary-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .chip-compact {
-    background: #f1f5f9;
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 4px;
-    color: #475569;
-  }
-
-  /* Hide Desktop specific things */
   .desktop-only {
     display: none !important;
   }
-
-  .mobile-only-back {
-    margin-bottom: 12px;
-    width: 100%;
-    background: #f8fafc;
-  }
-
   .sidebar {
-    display: none !important; /* Completely hide sidebar on mobile/tablet */
+    display: none !important;
   }
-
   .content {
-    padding: 16px;
     overflow-y: visible;
     order: 1;
   }
-
-  .rider-list-sidebar {
-    max-height: 300px; /* Constrain height so it doesn't take over the whole screen */
-  }
-
   .stats-row {
     flex-direction: column;
   }
-
   .stat-body {
     grid-template-columns: 1fr;
   }
-
-  .highlight-grid {
-    gap: 6px;
-    padding: 12px 12px;
-  }
-
-  .highlight-card {
-    padding: 10px 6px;
-  }
-
-  .highlight-headline {
-    font-size: 14px;
-  }
-
-  .highlight-detail {
-    font-size: 10px;
-  }
-
   .stat-block {
     border-right: none;
     border-bottom: 1px solid #e2e8f0;
+    &:last-child {
+      border-bottom: none;
+    }
   }
-
-  .stat-block:last-child {
-    border-bottom: none;
-  }
-
   .stat-bar-row {
     grid-template-columns: 60px 1fr 72px;
-    gap: 6px;
+    gap: rem(6);
   }
-
-  .bar-label { font-size: 11px; }
-  .bar-value  { font-size: 11px; }
-
-  .summary-intro-text { font-size: 14px; }
-  .summary-tip-item   { font-size: 13px; }
-
   .tabs {
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
   }
-  .tabs::-webkit-scrollbar { display: none; }
-
   .tab {
     flex: 0 0 auto;
     text-align: center;
-    padding: 10px 16px;
-    font-size: 13px;
   }
-
-  .section-content {
-    font-size: 15px;
-  }
-
-  .rider-desc-content {
-    font-size: 13px;
-  }
-}
-
-/* ── QA 섹션 ────────────────────────────── */
-.qna-wrap {
-  padding: 0;
 }
 
 .qna-notice {
-  margin: 16px 16px 0;
-  background: #fffbeb;
   border: 1px solid #fcd34d;
-  border-radius: 8px;
-  padding: 12px 14px;
-  font-size: 13px;
-  color: #92400e;
-  line-height: 1.65;
-}
-
-.qna-section {
-  padding: 20px 16px 4px;
 }
 
 .qna-tag-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: rem(8);
+  margin-bottom: rem(16);
   flex-wrap: wrap;
 }
 
 .qna-rider-tag {
-  background: #f5f8ff;
   border: 1px solid #dde5f5;
-  border-radius: 8px;
-  padding: 5px 10px;
-  font-size: 12px;
-  color: #1d4ed8;
-  font-weight: 500;
   word-break: keep-all;
 }
 
 .qna-claim-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: rem(5);
   background: #fff;
   border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 5px 10px;
-  font-size: 12px;
-  color: #374151;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-}
-.qna-claim-btn svg { width: 13px; height: 13px; }
-.qna-claim-btn:hover { background: #f9fafb; }
-.qna-claim-btn.open {
-  color: #dc2626;
-  border-color: #fca5a5;
-  background: #fff5f5;
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+  &:hover {
+    background: #f9fafb;
+  }
 }
 
 .qna-claim-detail {
-  background: #f9fafb;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 14px;
-  font-size: 13px;
-  color: #4b5563;
-  line-height: 1.8;
-  margin-bottom: 16px;
-  white-space: pre-wrap;
+  margin-bottom: rem(16);
   word-break: keep-all;
   overflow-wrap: break-word;
+  overflow-x: auto;
+
+  // description_html: 표/문단
+  ::v-deep table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: rem(8) 0;
+  }
+
+  ::v-deep td,
+  ::v-deep th {
+    border: 1px solid #e5e7eb;
+    padding: rem(6) rem(8);
+    vertical-align: top;
+    text-align: left;
+  }
+
+  ::v-deep p {
+    margin: 0 0 rem(6);
+  }
 }
 
 .qna-block {
-  margin-bottom: 22px;
+  margin-bottom: rem(22);
 }
 
 .qna-question {
-  font-size: 15px;
-  font-weight: 600;
-  color: #111827;
-  margin-bottom: 10px;
-  line-height: 1.6;
+  margin-bottom: rem(10);
   word-break: keep-all;
-}
-
-.qna-answer {
-  font-size: 14px;
-  color: #374151;
-  line-height: 1.8;
-  border-left: 3px solid #d1d5db;
-  padding-left: 14px;
-  margin-bottom: 10px;
-  word-break: keep-all;
-}
-
-.qna-answer-row {
-  display: flex;
-  gap: 10px;
-  padding: 9px 14px;
-  border-radius: 8px;
-  background: #f8fafc;
-  font-size: 13px;
-  color: #374151;
-  line-height: 1.7;
-  word-break: keep-all;
-  margin-bottom: 6px;
-}
-
-.qna-answer-row.highlight {
-  background: #fffbeb;
-  border-left: 3px solid #f59e0b;
-  border-radius: 0 8px 8px 0;
-  color: #92400e;
-}
-
-.qna-answer-row.caution {
-  background: #fef2f2;
-  border-left: 3px solid #f87171;
-  border-radius: 0 8px 8px 0;
-  color: #991b1b;
 }
 
 .qna-answer-label {
@@ -2298,14 +2224,8 @@ async function generateSalesTalk() {
 }
 
 .qna-tip {
-  background: #f0fdf4;
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 13px;
-  color: #166534;
-  line-height: 1.65;
   display: flex;
-  gap: 8px;
+  gap: rem(8);
   word-break: keep-all;
 }
 
@@ -2316,102 +2236,58 @@ async function generateSalesTalk() {
 .qna-divider {
   border: none;
   border-top: 1px solid #e5e7eb;
-  margin: 2px 0 0;
+  margin: rem(2) 0 0;
 }
 
-/* Product selector */
 .product-selector-bar {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 20px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.product-selector-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #475569;
-  white-space: nowrap;
 }
 
 .product-selector-select {
-  height: 36px;
-  padding: 0 32px 0 12px;
-  border: 1.5px solid #cbd5e1;
-  border-radius: 8px;
   background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 10px center;
-  appearance: none;
-  font-size: 14px;
-  font-weight: 500;
-  color: #1e293b;
-  cursor: pointer;
-  transition: border-color 0.15s;
   min-width: 200px;
+  &:focus {
+    outline: none;
+    border-color: #6366f1;
+  }
 }
 
-.product-selector-select:focus {
-  outline: none;
-  border-color: #6366f1;
-}
-
-/* Coming soon page */
 .coming-soon-view {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @include flexbox(center, center);
   min-height: calc(100vh - 60px);
-  padding: 40px 20px;
+  padding: rem(40) rem(20);
 }
 
 .coming-soon-card {
   text-align: center;
   max-width: 420px;
-  padding: 48px 40px;
+  padding: rem(48) rem(40);
   background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
   border: 1px solid #e5e7eb;
 }
 
 .coming-soon-icon {
   font-size: 52px;
-  margin-bottom: 20px;
+  margin-bottom: rem(20);
 }
 
 .coming-soon-title {
-  font-size: 22px;
   font-weight: 700;
-  color: #1e293b;
-  margin: 0 0 14px;
+  margin: 0 0 rem(14);
 }
 
 .coming-soon-desc {
-  font-size: 14px;
-  color: #64748b;
-  line-height: 1.7;
-  margin: 0 0 28px;
+  margin: 0 0 rem(28);
 }
 
 .coming-soon-back-btn {
   display: inline-block;
-  padding: 10px 22px;
-  background: #6366f1;
   color: #fff;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
   cursor: pointer;
   transition: background 0.15s;
 }
 
-.coming-soon-back-btn:hover {
-  background: #4f46e5;
-}
-
-/* ── 이 페이지(coaching-track.vue) 자체 스타일 ───────────────────────── */
 .toast-container {
   position: fixed;
   bottom: 24px;
@@ -2419,37 +2295,2118 @@ async function generateSalesTalk() {
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: rem(8);
   z-index: 9999;
   pointer-events: none;
 }
 
 .toast {
-  padding: 12px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
   color: white;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   animation: coaching-track-slideUp 0.2s ease;
   max-width: 400px;
   text-align: center;
+  &.info {
+    background: #334155;
+  }
+  // TODO(임시·커밋 금지): 진입 URL 디버그 토스트
+  &.debug {
+    background: #111827;
+    max-width: 92vw;
+    text-align: left;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 12px !important;
+    user-select: text;
+  }
 }
-
-.toast.error   { background: #ef4444; }
-.toast.success { background: #22c55e; }
-.toast.info    { background: #334155; }
-
 @keyframes coaching-track-slideUp {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.rider-category-header {
-  padding: 6px 10px;
-  background: #f1f5f9;
-  font-size: 10px;
-  font-weight: 700;
-  color: #64748b;
+.app-root {
+  --so-type-page: 26px;
+  --so-type-section: 22px;
+  --so-type-card: 18px;
+  --so-type-body-lg: 17px;
+  --so-type-body: 16px;
+  --so-type-label: 15px;
+  --so-type-meta: 13px;
+  --so-leading-tight: 1.3;
+  --so-leading-body: 1.62;
+  --so-leading-relaxed: 1.75;
+  --so-space-1: 4px;
+  --so-space-2: 8px;
+  --so-space-3: 12px;
+  --so-space-4: 16px;
+  --so-space-5: 20px;
+  --so-space-6: 24px;
+  --so-space-8: 32px;
+  --so-radius-xs: 6px;
+  --so-radius-sm: 10px;
+  --so-radius-md: 14px;
+  --so-radius-lg: 18px;
+  --so-page: #f9f9ff;
+  --so-surface: #ffffff;
+  --so-surface-subtle: #f7f6fc;
+  --so-surface-inset: #edecf7;
+  --so-text-title: #16151f;
+  --so-text: #2c2b3a;
+  --so-text-secondary: #57566b;
+  --so-text-tertiary: #6c6b81;
+  --so-text-disabled: #929bad;
+  --so-border: #deddea;
+  --so-border-subtle: #eae9f3;
+  --so-border-strong: #cbc9dc;
+  --so-control-selected: #677de4;
+  --so-action: #4457d6;
+  --so-action-hover: #3644b3;
+  --so-action-subtle: #ebedfd;
+  --so-action-text: #3b4cc4;
+  --so-selected-ring: #c4cbf8;
+  --so-selected-bg: #fbfbff;
+  --so-utility-border: #9aa8c9;
+  --so-utility-border-hover: #7f90b8;
+  --so-utility-text: #16151f;
+  --so-utility-text-active: #384b63;
+  --so-gradient-utility-border: linear-gradient(120deg, #a6b3d5 0%, #8fb4bd 52%, #b5acd4 100%);
+  --so-gradient-utility-border-hover: linear-gradient(120deg, #8597c4 0%, #72a0aa 52%, #9d91c5 100%);
+  --so-gradient-utility-surface: linear-gradient(135deg, #ffffff 0%, #f8f9fd 54%, #f3f8f8 100%);
+  --so-gradient-utility-surface-hover: linear-gradient(135deg, #ffffff 0%, #f2f5fb 52%, #eaf5f4 100%);
+  --so-gradient-utility-surface-active: linear-gradient(135deg, #f6f7fc 0%, #edf1fa 50%, #e6f2f1 100%);
+  --so-shadow-utility-floating: 0 10px 28px rgba(54, 65, 96, 0.14), 0 2px 8px rgba(70, 111, 116, 0.08);
+  --so-shadow-utility-floating-hover: 0 12px 30px rgba(54, 65, 96, 0.17), 0 3px 10px rgba(70, 111, 116, 0.1);
+  --so-brand-mark: #3d4fe0;
+  --so-brand-ink: #2b39b8;
+  --so-brand-ring: rgba(91, 106, 217, 0.22);
+  --so-gradient-ai-border: linear-gradient(105deg, #2b39b8, #4f5fe6 48%, #8b96ff);
+  --so-gradient-brand: linear-gradient(105deg, #7a5fd8 0%, #5b6ad9 48%, #3576bb 100%);
+  --so-gradient-brand-hover: linear-gradient(105deg, #6d51cd 0%, #4f5ecf 48%, #2c69ab 100%);
+  --so-gradient-selected-surface: linear-gradient(135deg, #fcfaff 0%, #f8f9ff 58%, #f8fbff 100%);
+  --so-ai: #6d51cd;
+  --so-ai-subtle: #faf7fc;
+  --so-success: #11734f;
+  --so-success-subtle: #effaf5;
+  --so-warning: #7a4d00;
+  --so-warning-subtle: #fff8e8;
+  --so-danger: #94404c;
+  --so-danger-subtle: #fff5f6;
+  --so-danger-border: #f1cfd5;
+  --so-shadow-1: 0 1px 2px rgba(62, 56, 108, 0.055);
+  --so-shadow-2: 0 8px 26px rgba(62, 56, 108, 0.085);
+  --so-shadow-brand: 0 8px 22px rgba(91, 106, 217, 0.2);
+  --so-ring: 0 0 0 3px rgba(68, 87, 214, 0.18);
+  --so-fast: 120ms;
+  --so-base: 180ms;
+  --so-ease: cubic-bezier(0.2, 0, 0, 1);
+  --so-content-work: calc(900px + var(--so-gutter) * 2);
+  --so-content-reading: 760px;
+  --so-gutter: clamp(16px, 1.8vw + 8.8px, 32px);
+  --so-control-h: 44px;
+  --so-edge: max(var(--so-gutter), calc((100% - var(--so-content-work)) / 2 + var(--so-gutter)));
+  background: var(--so-page);
+  color: var(--so-text);
+  overflow-x: hidden;
+  overflow-y: auto;
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  flex: 1 1 0;
+  width: 0;
+  align-self: stretch;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+}
+
+.app-root {
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--so-ring);
+    border-radius: var(--so-radius-xs);
+  }
+  .header {
+    position: relative;
+    top: auto;
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 64px;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0;
+    padding: 14px var(--so-edge);
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--so-border-subtle);
+    font-size: var(--so-type-body);
+  }
+  .service-bar {
+    @include flexbox(space-between, center);
+    gap: var(--so-space-3);
+    padding-bottom: 0;
+    flex-wrap: nowrap;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: rem(12);
+    min-width: 0;
+    flex: 0 1 auto; // 로고 클릭 → 처음 화면. 헤더 빈 곳은 안 눌리게 내용 폭만
+    cursor: pointer;
+  }
+  .logo-icon {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    color: var(--so-brand-mark);
+  }
+  .logo-main {
+    flex: 0 0 auto;
+    font-size: 19px;
+    font-weight: 760;
+    letter-spacing: -0.025em;
+    color: var(--so-text-title);
+  }
+  .header-tagline {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-left: rem(12);
+    border-left: 1px solid var(--so-border-strong);
+    color: var(--so-text-secondary);
+    font-size: 15px;
+    font-weight: 520;
+    line-height: 1.4;
+    letter-spacing: -0.02em;
+    strong {
+      color: var(--so-brand-ink);
+      font-weight: 680;
+    }
+  }
+  .selection-view {
+    flex: 0 0 auto;
+    min-height: calc(100dvh - 60px - 64px);
+    overflow-y: visible;
+    max-width: var(--so-content-work);
+    padding: var(--so-space-6) var(--so-gutter) 0;
+    gap: 0;
+  }
+  .product-selector-bar,
+  .selection-header-section {
+    width: 100%;
+  }
+  .product-selector-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0;
+    background: transparent;
+    border-bottom: 0;
+    margin-bottom: var(--so-space-6);
+    gap: var(--so-space-3);
+  }
+  .product-selector-heading {
+    @include flexbox(space-between, baseline);
+    flex-wrap: wrap;
+    gap: var(--so-space-2) var(--so-space-4);
+    width: 100%;
+  }
+  .product-selector-title {
+    width: auto;
+    color: var(--so-text-title);
+    font-size: var(--so-type-card);
+    font-weight: 750;
+    line-height: var(--so-leading-tight);
+  }
+  .selection-view > *,
+  .selection-header-section > .card {
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .selection-header-section,
+  .selection-main-grid,
+  .rider-grid-large,
+  .category-pills-wrap {
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .product-selector-bar > .product-selector-select {
+    width: 100%;
+    margin-left: 0;
+    min-width: 0;
+    max-width: none;
+    flex: none;
+  }
+  .sidebar-search-input {
+    min-height: var(--so-control-h);
+    height: auto;
+    border: 1px solid var(--so-border-strong);
+    border-radius: var(--so-radius-sm);
+    background-color: var(--so-surface);
+    color: var(--so-text-title);
+    font-size: var(--so-type-body);
+    transition: border-color var(--so-fast) var(--so-ease), box-shadow var(--so-fast) var(--so-ease);
+  }
+  .product-selector-select {
+    appearance: none;
+    -webkit-appearance: none;
+    height: auto;
+    cursor: pointer;
+    transition: box-shadow var(--so-fast) var(--so-ease);
+  }
+  .product-selector-select {
+    width: 100%;
+    min-height: 60px;
+    padding: 0 rem(52) 0 rem(16);
+    border: 2px solid transparent;
+    border-radius: 16px;
+    color: var(--so-text-title);
+    font-size: 18px;
+    font-weight: 650;
+    line-height: 1.3;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232b39b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 10 6 6 6-6'/%3E%3C/svg%3E"), linear-gradient(var(--so-surface), var(--so-surface)), var(--so-gradient-ai-border);
+    background-origin: border-box, padding-box, border-box;
+    background-clip: border-box, padding-box, border-box;
+    background-repeat: no-repeat;
+    background-position: calc(100% - 16px) 50%, 0 0, 0 0;
+    background-size: 20px 20px, auto, auto;
+    box-shadow: 0 2px 14px var(--so-brand-ring);
+    &:hover {
+      box-shadow: 0 3px 18px var(--so-brand-ring);
+    }
+  }
+  .sidebar-search-input {
+    padding: 0 var(--so-space-4);
+  }
+  .sidebar-search-input:focus,
+  .notes-input:focus {
+    border-color: var(--so-action);
+    box-shadow: var(--so-ring);
+  }
+  .product-selector-bar .product-selector-select:focus-visible,
+  .product-selector-bar .product-selector-select:focus {
+    outline: 3px solid var(--so-brand-ring);
+    outline-offset: 2px;
+  }
+  .profile-notes-row {
+    min-height: var(--so-control-h);
+    justify-content: center;
+    gap: rem(2);
+    padding: var(--so-space-2) var(--so-space-4);
+    border: 1px solid var(--so-border);
+    border-radius: var(--so-radius-sm);
+    background: var(--so-surface);
+    transition: border-color var(--so-fast) var(--so-ease), box-shadow var(--so-fast) var(--so-ease);
+  }
+  .field-label {
+    font-size: var(--so-type-meta);
+    font-weight: 650;
+    color: var(--so-text-secondary);
+    text-transform: none;
+    letter-spacing: 0;
+    line-height: var(--so-leading-tight);
+  }
+  .notes-input {
+    min-height: 26px;
+    font-size: var(--so-type-body);
+    font-weight: 400;
+    color: var(--so-text-title);
+    &::placeholder {
+      color: var(--so-text-disabled);
+    }
+  }
+  .profile-selector {
+    display: grid;
+    gap: var(--so-space-3);
+    margin: 0 0 var(--so-space-4);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    > * {
+      min-width: 0;
+    }
+    &__fields {
+      display: grid;
+      gap: var(--so-space-4);
+    }
+    &__field {
+      display: grid;
+      gap: var(--so-space-2);
+      min-width: 0;
+    }
+    &__group {
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+    &__select {
+      width: 100%;
+      min-height: var(--so-control-h);
+      appearance: none;
+      -webkit-appearance: none;
+      padding: 0 48px 0 var(--so-space-4);
+      border: 1px solid var(--so-border-strong);
+      border-radius: var(--so-radius-sm);
+      background-color: var(--so-surface);
+      color: var(--so-text-title);
+      font-size: var(--so-type-body);
+      font-weight: 650;
+      background-image: linear-gradient(45deg, transparent 50%, var(--so-text-tertiary) 50%), linear-gradient(135deg, var(--so-text-tertiary) 50%, transparent 50%);
+      background-position: calc(100% - 25px) 50%, calc(100% - 20px) 50%;
+      background-repeat: no-repeat;
+      background-size: 5px 5px;
+      transition: border-color var(--so-fast) var(--so-ease), box-shadow var(--so-fast) var(--so-ease);
+    }
+    &__select:hover {
+      border-color: var(--so-text-tertiary);
+    }
+    &__select:disabled {
+      background-color: var(--so-surface-inset);
+      color: var(--so-text-disabled);
+      cursor: not-allowed;
+    }
+  }
+  .profile-segment {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--so-space-2);
+    &__option {
+      position: relative;
+      min-width: 0;
+      cursor: pointer;
+    }
+    &__option input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+    &__surface {
+      @include flexbox(center, center);
+      min-height: 52px;
+      gap: var(--so-space-2);
+      padding-inline: var(--so-space-4);
+      border: 1px solid var(--so-border);
+      border-radius: var(--so-radius-sm);
+      background: var(--so-surface);
+      color: var(--so-text-secondary);
+      font-size: var(--so-type-body);
+      font-weight: 650;
+      transition: border-color var(--so-fast) var(--so-ease), background var(--so-fast) var(--so-ease), box-shadow var(--so-fast) var(--so-ease), color var(--so-fast) var(--so-ease);
+    }
+    &__indicator {
+      display: grid;
+      place-items: center;
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+      border: 1px solid var(--so-border-strong);
+      border-radius: 50%;
+      background: var(--so-surface);
+      color: transparent;
+    }
+    &__indicator svg {
+      width: 11px;
+      height: 11px;
+    }
+    &__option:hover .profile-segment__surface {
+      border-color: var(--so-selected-ring);
+    }
+    &__option input:focus-visible + .profile-segment__surface {
+      border-color: var(--so-action);
+      box-shadow: var(--so-ring);
+    }
+    &__option input:checked + .profile-segment__surface {
+      border-color: var(--so-selected-ring);
+      background: var(--so-gradient-selected-surface);
+      color: var(--so-action-text);
+      box-shadow: 0 5px 16px rgba(91, 106, 217, 0.11);
+    }
+    &__option input:checked + .profile-segment__surface .profile-segment__indicator {
+      border-color: transparent;
+      background: var(--so-control-selected);
+      color: #fff;
+    }
+    &__option input:disabled + .profile-segment__surface {
+      border-color: var(--so-border-subtle);
+      background: var(--so-surface-inset);
+      color: var(--so-text-disabled);
+      cursor: not-allowed;
+    }
+  }
+  .profile-selector {
+    &__result {
+      display: flex;
+      align-items: center;
+      min-height: 32px;
+      margin: 0;
+      padding: 0 var(--so-space-1);
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--so-text-secondary);
+      font-size: var(--so-type-label);
+      line-height: 1.55;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+    &__result strong {
+      color: var(--so-text-title);
+      font-weight: 750;
+    }
+  }
+  .card {
+    padding: var(--so-space-4);
+    margin-bottom: var(--so-space-4);
+    border: 1px solid var(--so-border-subtle);
+    border-radius: var(--so-radius-md);
+    box-shadow: var(--so-shadow-1);
+  }
+  .card-title {
+    font-size: var(--so-type-card);
+    font-weight: 750;
+    color: var(--so-text-title);
+    line-height: var(--so-leading-tight);
+    margin-bottom: var(--so-space-4);
+  }
+  .category-pills-wrap {
+    gap: var(--so-space-2);
+    padding: 0 0 var(--so-space-5);
+  }
+  .cat-pill {
+    min-height: 38px;
+    gap: var(--so-space-2);
+    padding: 0 var(--so-space-4);
+    border: 1px solid var(--so-border);
+    border-radius: 999px;
+    background: var(--so-surface);
+    color: var(--so-text-secondary);
+    font-size: var(--so-type-label);
+    font-weight: 500;
+    transition: border-color var(--so-fast) var(--so-ease), background var(--so-fast) var(--so-ease), color var(--so-fast) var(--so-ease), box-shadow var(--so-fast) var(--so-ease);
+    &:hover {
+      border-color: var(--so-border-strong);
+      color: var(--so-text-title);
+    }
+    &.active {
+      border-color: transparent;
+      background: var(--so-gradient-brand);
+      color: #fff;
+      font-weight: 650;
+      box-shadow: 0 4px 12px rgba(91, 106, 217, 0.18);
+    }
+  }
+  .cat-count {
+    padding: 1px var(--so-space-2);
+    border-radius: 999px;
+    background: var(--so-surface-inset);
+    color: var(--so-text-secondary);
+    font-size: var(--so-type-meta);
+    font-weight: 650;
+  }
+  .cat-pill.active .cat-count {
+    background: rgba(255, 255, 255, 0.22);
+    color: rgba(255, 255, 255, 0.92);
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: rem(-1);
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .selected-only-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: rem(6);
+    margin-bottom: var(--so-space-3);
+    font-size: var(--so-type-meta);
+    font-weight: 600;
+    color: var(--so-action-text);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    input[type='checkbox'] {
+      width: 15px;
+      height: 15px;
+      margin: 0;
+      accent-color: var(--so-action);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+  }
+  .category-filter {
+    position: relative;
+    isolation: isolate;
+    min-width: 0;
+    padding-bottom: var(--so-space-5);
+    padding-left: rem(4);
+    .category-pills-wrap {
+      min-height: var(--so-control-h);
+      align-items: center;
+      padding: rem(2) 0;
+    }
+  }
+  .category-expand-toggle {
+    position: absolute;
+    z-index: 10;
+    top: 0;
+    right: 0;
+    display: grid;
+    place-items: center;
+    width: var(--so-control-h);
+    min-width: var(--so-control-h);
+    height: var(--so-control-h);
+    border: 1px solid var(--so-selected-ring);
+    border-radius: 50%;
+    background: linear-gradient(145deg, #fff 0%, #f1f3ff 100%);
+    color: var(--so-action);
+    cursor: pointer;
+    box-shadow: -10px 0 18px rgba(69, 72, 112, 0.08), 0 6px 16px rgba(91, 106, 217, 0.16);
+    transition: border-color var(--so-fast) var(--so-ease), background var(--so-fast) var(--so-ease), box-shadow var(--so-fast) var(--so-ease), transform var(--so-fast) var(--so-ease);
+    &:hover {
+      border-color: #aeb9f3;
+      background: linear-gradient(145deg, #fff 0%, #e9edff 100%);
+      color: var(--so-action-hover);
+      transform: translateY(-1px);
+    }
+    &:active {
+      transform: scale(0.96);
+    }
+  }
+  .category-expand-icon {
+    width: 18px;
+    height: 18px;
+    transition: transform var(--so-fast) var(--so-ease);
+  }
+  .category-filter.is-expanded .category-expand-icon {
+    transform: rotate(180deg);
+  }
+  .rider-grid-large {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: var(--so-space-3);
+    padding-bottom: 0;
+  }
+  .rider-card-large {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: var(--so-space-3);
+    min-height: 92px;
+    padding: var(--so-space-4);
+    border: 1px solid var(--so-border);
+    border-radius: var(--so-radius-md);
+    background: var(--so-surface);
+    transition: border-color var(--so-base) var(--so-ease), background var(--so-base) var(--so-ease), box-shadow var(--so-base) var(--so-ease), transform var(--so-base) var(--so-ease);
+    &:hover {
+      border-color: var(--so-selected-ring);
+      box-shadow: var(--so-shadow-2);
+      transform: translateY(-1px);
+    }
+    &.selected {
+      border-color: var(--so-selected-ring);
+      background: var(--so-gradient-selected-surface);
+      box-shadow: 0 0 0 1px var(--so-selected-ring), var(--so-shadow-1);
+    }
+    &.selected .rider-name-large {
+      font-weight: 650;
+      color: var(--so-text-title);
+    }
+  }
+  .rider-card-header {
+    width: auto;
+    display: block;
+  }
+  .rider-load-more {
+    @include flexbox(center, center);
+    gap: var(--so-space-3);
+    width: 100%;
+    min-height: 52px;
+    margin-top: var(--so-space-3);
+    padding: 0 var(--so-space-5);
+    border: 1px solid var(--so-border);
+    border-radius: var(--so-radius-md);
+    background: var(--so-surface);
+    color: var(--so-action-text);
+    font-size: var(--so-type-label);
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color var(--so-fast) var(--so-ease), background var(--so-fast) var(--so-ease), box-shadow var(--so-fast) var(--so-ease);
+    &:hover:not([aria-disabled='true']) {
+      border-color: var(--so-selected-ring);
+      background: var(--so-action-subtle);
+      box-shadow: var(--so-shadow-1);
+    }
+    &[aria-disabled='true'] {
+      cursor: default;
+      color: var(--so-text-secondary);
+      background: var(--so-surface-subtle);
+    }
+  }
+  .rider-checkbox-large {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    margin: rem(1) 0 0;
+    flex-shrink: 0;
+    position: relative;
+    border: 1px solid var(--so-border-strong);
+    border-radius: 6px;
+    background: var(--so-surface);
+    cursor: pointer;
+    transition: border-color var(--so-fast) var(--so-ease), background var(--so-fast) var(--so-ease);
+    &:hover {
+      border-color: var(--so-text-tertiary);
+    }
+    &:checked {
+      border-color: transparent;
+      background: var(--so-gradient-brand);
+    }
+    &:checked::after {
+      content: '';
+      position: absolute;
+      left: 7px;
+      top: 3px;
+      width: 5px;
+      height: 10px;
+      border-right: 2px solid #fff;
+      border-bottom: 2px solid #fff;
+      transform: rotate(45deg);
+    }
+  }
+  .rider-name-large {
+    min-width: 0;
+    font-size: var(--so-type-body);
+    font-weight: 500;
+    line-height: 1.45;
+    color: var(--so-text-title);
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  .selection-footer {
+    justify-content: center;
+    width: 100%;
+    padding: var(--so-space-4) 0;
+    background: rgba(249, 249, 255, 0.9);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--so-border-subtle);
+  }
+  .main-generate-btn {
+    width: min(100%, clamp(480px, 48vw, 680px));
+    min-width: 0;
+    min-height: 52px;
+    margin-inline: auto;
+    padding: 0 var(--so-space-8);
+    border-radius: var(--so-radius-sm);
+    border: 1px solid transparent;
+    background: var(--so-gradient-brand);
+    color: #fff;
+    font-size: var(--so-type-body-lg);
+    font-weight: 750;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    box-shadow: var(--so-shadow-brand);
+    transition: background var(--so-base) var(--so-ease), box-shadow var(--so-base) var(--so-ease), transform var(--so-fast) var(--so-ease);
+    &:hover:not(:disabled) {
+      background: var(--so-gradient-brand-hover);
+      box-shadow: 0 10px 26px rgba(91, 106, 217, 0.24);
+    }
+    &:active:not(:disabled) {
+      box-shadow: 0 4px 12px rgba(91, 106, 217, 0.17);
+      transform: translateY(1px);
+    }
+    &:disabled {
+      background: var(--so-surface-inset);
+      color: var(--so-text-disabled);
+      border-color: var(--so-border);
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+  }
+  .content {
+    --result-inset: 24px;
+    padding: var(--so-space-6) var(--so-gutter);
+    min-width: 0;
+    > * {
+      max-width: none;
+      margin-left: 0;
+      margin-right: auto;
+    }
+  }
+  .sidebar {
+    width: 340px;
+    flex-shrink: 0;
+    padding: var(--so-space-5);
+    border-right: 0;
+    border-left: 1px solid var(--so-border-subtle);
+    background: var(--so-surface-subtle);
+  }
+  .tabs {
+    gap: var(--so-space-6);
+    padding-inline: calc(var(--result-inset) + 1px);
+    margin-bottom: var(--so-space-5);
+    border-bottom-color: var(--so-border-subtle);
+  }
+  .tab {
+    position: relative;
+    min-height: var(--so-control-h);
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: inherit;
+    font-size: var(--so-type-body);
+    font-weight: 650;
+    color: var(--so-text-secondary);
+    &::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 3px;
+      border-radius: 3px 3px 0 0;
+      background: transparent;
+      transition: background var(--so-base) var(--so-ease);
+    }
+    &:hover {
+      color: var(--so-text-title);
+    }
+    &.active {
+      color: var(--so-action-text);
+      border-color: transparent;
+    }
+    &.active::after {
+      background: var(--so-gradient-brand);
+    }
+    &:focus-visible {
+      outline: 2px solid var(--so-action);
+      outline-offset: -2px;
+      box-shadow: none;
+    }
+  }
+  .script-box {
+    border: 1px solid var(--so-border-subtle);
+    border-radius: var(--so-radius-lg);
+    box-shadow: var(--so-shadow-1);
+  }
+  .design-summary {
+    background: var(--so-surface-subtle);
+    border-bottom: 1px solid var(--so-border-subtle);
+  }
+  .consultation-opening {
+    display: grid;
+    gap: var(--so-space-4);
+    margin-bottom: var(--so-space-5);
+    padding: var(--result-inset);
+    border: 1px solid var(--so-selected-ring);
+    border-radius: var(--so-radius-lg);
+    background: radial-gradient(circle at 100% 0, rgba(139, 150, 255, 0.14), transparent 42%), linear-gradient(135deg, #fcfbff 0%, #f5f7ff 56%, #f5fafb 100%);
+    box-shadow: var(--so-shadow-2);
+    &__header {
+      @include flexbox(space-between, flex-start);
+      gap: var(--so-space-4);
+      flex-wrap: wrap;
+    }
+    &__eyebrow {
+      margin: 0 0 var(--so-space-1);
+      color: var(--so-action-text);
+      font-size: var(--so-type-label);
+      font-weight: 750;
+      letter-spacing: 0.02em;
+    }
+    &__title {
+      display: block;
+      margin: 0;
+      color: var(--so-text-title);
+      font-size: 24px;
+      font-weight: 780;
+      line-height: var(--so-leading-tight);
+      letter-spacing: -0.035em;
+    }
+    &__title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: var(--so-space-1) var(--so-space-3);
+    }
+    &__notice {
+      margin: 0;
+      color: var(--so-danger);
+      font-size: var(--so-type-label);
+      line-height: var(--so-leading-body);
+      word-break: keep-all;
+    }
+    &__loading {
+      display: flex;
+      align-items: center;
+      gap: var(--so-space-3);
+      min-height: 72px;
+      color: var(--so-text-secondary);
+      font-size: var(--so-type-body);
+    }
+    // 박스 안의 설계 요약: 박스가 여백·배경을 가지므로 안쪽 여백·배경은 뺀다
+    .design-summary {
+      background: transparent;
+      border-bottom: 0;
+    }
+    .highlight-grid {
+      padding: 0 0 var(--so-space-2);
+      background: transparent;
+    }
+    .result-disclosure {
+      margin-inline: 0;
+    }
+    // 마지막 펼치기(영업 꿀팁) 아래는 박스 안쪽 여백만 남긴다
+    .result-disclosure:last-child {
+      &:not([open]) > .result-disclosure__trigger {
+        min-height: 0;
+        padding-bottom: 0;
+      }
+      .summary-tips-block {
+        padding-bottom: 0;
+      }
+      .summary-tip-item:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
+  .summary-header {
+    padding: var(--so-space-5) var(--result-inset) var(--so-space-3);
+    font-size: var(--so-type-section);
+    font-weight: 750;
+    color: var(--so-text-title);
+    letter-spacing: 0;
+    text-transform: none;
+    line-height: var(--so-leading-tight);
+    border-bottom-color: var(--so-border-subtle);
+  }
+  .scripts-wrap {
+    display: grid;
+    gap: var(--so-space-3);
+    margin-top: 0;
+    padding: var(--so-space-6) var(--result-inset);
+  }
+  .scripts-list-heading {
+    @include flexbox(space-between, flex-start);
+    gap: var(--so-space-4);
+    padding: 0 0 var(--so-space-2);
+    h2 {
+      margin: 0;
+      color: var(--so-text-title);
+      font-size: var(--so-type-section);
+      font-weight: 760;
+      line-height: var(--so-leading-tight);
+    }
+    &__count {
+      flex: 0 0 auto;
+      padding: rem(5) rem(9);
+      border-radius: 999px;
+      background: var(--so-action-subtle);
+      color: var(--so-action-text);
+      font-size: var(--so-type-meta);
+      font-weight: 700;
+    }
+  }
+  .script-accordion-item {
+    overflow: hidden;
+    border: 1px solid var(--so-border);
+    border-radius: var(--so-radius-md);
+    background: var(--so-surface);
+    box-shadow: var(--so-shadow-1);
+    transition: border-color var(--so-base) var(--so-ease), box-shadow var(--so-base) var(--so-ease);
+    &.open,
+    &:focus-within {
+      border-color: var(--so-selected-ring);
+      box-shadow: 0 8px 22px rgba(73, 81, 145, 0.09);
+    }
+  }
+  .script-accordion-heading {
+    margin: 0;
+  }
+  .script-accordion-trigger {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--so-space-3);
+    width: 100%;
+    min-height: 64px;
+    padding: var(--so-space-3) var(--so-space-4);
+    border: 0;
+    background: var(--so-surface);
+    color: var(--so-text-title);
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--so-fast) var(--so-ease);
+    &:hover {
+      background: var(--so-surface-subtle);
+    }
+    &:focus-visible {
+      outline: 3px solid var(--so-action);
+      outline-offset: -3px;
+      box-shadow: none;
+    }
+  }
+  .script-accordion-item.open .script-accordion-trigger {
+    background: var(--so-gradient-selected-surface);
+  }
+  .script-accordion-trigger {
+    &__number {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: var(--so-action-subtle);
+      color: var(--so-action-text);
+      font-size: var(--so-type-meta);
+      font-weight: 750;
+    }
+    &__name {
+      min-width: 0;
+      color: var(--so-text-title);
+      font-size: var(--so-type-body);
+      font-weight: 680;
+      line-height: 1.5;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+    &__action {
+      display: inline-flex;
+      align-items: center;
+      gap: rem(5);
+      color: var(--so-action-text);
+      font-size: var(--so-type-label);
+      font-weight: 680;
+      white-space: nowrap;
+    }
+    &__chevron {
+      width: 16px;
+      height: 16px;
+      transition: transform var(--so-base) var(--so-ease);
+    }
+  }
+  .script-accordion-item.open .script-accordion-trigger__chevron {
+    transform: rotate(180deg);
+  }
+  .script-accordion-panel {
+    display: grid;
+    gap: var(--so-space-3);
+    padding: 0 var(--so-space-4) var(--so-space-4) 58px;
+    background: var(--so-gradient-selected-surface);
+    .qna-tag-row {
+      justify-content: flex-end;
+      margin: 0;
+    }
+  }
+  .stat-title {
+    font-size: var(--so-type-card);
+    font-weight: 650;
+    color: var(--so-text-title);
+    line-height: var(--so-leading-tight);
+    margin-bottom: var(--so-space-3);
+  }
+  .qna-rider-tag {
+    padding: var(--so-space-2) var(--so-space-3);
+    border-radius: var(--so-radius-xs);
+    border-color: var(--so-border-subtle);
+    background: var(--so-surface-subtle);
+    font-size: var(--so-type-body-lg);
+    font-weight: 650;
+    color: var(--so-text-title);
+    line-height: var(--so-leading-tight);
+  }
+  .highlight-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--so-space-4);
+    padding: var(--so-space-5) var(--result-inset);
+    background: var(--so-surface-subtle);
+    border-bottom: 0;
+  }
+  .highlight-card {
+    flex: 1 1 190px;
+    border: 1px solid var(--so-border-subtle);
+    border-top: 1px solid var(--so-border-subtle);
+    border-radius: var(--so-radius-md);
+    padding: var(--so-space-4);
+    background: var(--so-surface);
+    text-align: left;
+    &:nth-child(2),
+    &:nth-child(3) {
+      border-top-color: var(--so-border-subtle);
+    }
+  }
+  .highlight-headline {
+    font-size: var(--so-type-card);
+    font-weight: 750;
+    color: var(--so-text-title);
+    line-height: var(--so-leading-tight);
+  }
+  .highlight-detail {
+    font-size: var(--so-type-body);
+    color: var(--so-text);
+    line-height: var(--so-leading-body);
+    overflow-wrap: anywhere;
+  }
+  .highlight-source {
+    font-size: var(--so-type-meta);
+    color: var(--so-text-secondary);
+  }
+  .stats-row {
+    display: grid;
+    gap: var(--so-space-4);
+    padding: 0 0 var(--so-space-4);
+    border-bottom: 0;
+  }
+  .stat-block {
+    border-radius: var(--so-radius-md);
+    padding: var(--so-space-5);
+    border-color: var(--so-border-subtle);
+    background: var(--so-surface);
+  }
+  .stat-reason {
+    font-size: var(--so-type-body);
+    line-height: var(--so-leading-body);
+    color: var(--so-action-text);
+    background: var(--so-action-subtle);
+    border: 1px solid var(--so-selected-ring);
+    border-left-width: 1px;
+    border-radius: var(--so-radius-sm);
+    padding: var(--so-space-3) var(--so-space-4);
+  }
+  .stat-description {
+    font-size: var(--so-type-body);
+    color: var(--so-text);
+    line-height: var(--so-leading-relaxed);
+    border-left: 0;
+    padding-left: 0;
+    padding-top: var(--so-space-3);
+    border-top: 1px solid var(--so-border-subtle);
+  }
+  .stat-source {
+    font-size: var(--so-type-meta);
+    color: var(--so-text-secondary);
+    margin-top: var(--so-space-3);
+  }
+  .stat-unit-label {
+    font-size: var(--so-type-meta);
+    color: var(--so-text-secondary);
+    background: var(--so-surface-inset);
+  }
+  .bar-label {
+    font-size: var(--so-type-label);
+    color: var(--so-text);
+    font-weight: 500;
+  }
+  .bar-value {
+    font-size: var(--so-type-label);
+    color: var(--so-text-title);
+    font-weight: 650;
+  }
+  .bar-track {
+    height: 10px;
+    border-radius: 999px;
+    background: var(--so-surface-inset);
+  }
+  .bar-fill {
+    border-radius: 999px;
+  }
+  .donut-center-label {
+    font-size: var(--so-type-section);
+    color: var(--so-text-title);
+  }
+  .donut-center-sub {
+    font-size: var(--so-type-meta);
+    color: var(--so-text-secondary);
+  }
+  .comparison-val {
+    font-size: var(--so-type-body);
+    color: var(--so-text-title);
+  }
+  .comparison-label {
+    font-size: var(--so-type-label);
+    color: var(--so-text);
+  }
+  .comparison-bar-outer {
+    background: var(--so-surface-inset);
+  }
+  .script-talk-block {
+    font-size: var(--so-type-body-lg);
+    color: var(--so-text);
+    line-height: var(--so-leading-relaxed);
+    border-left: 0;
+    padding: var(--so-space-4);
+    border: 1px solid var(--so-border-subtle);
+    border-radius: var(--so-radius-sm);
+    background: var(--so-surface-subtle);
+  }
+  .summary-tips-block {
+    padding: 0 0 var(--so-space-4);
+    background: none;
+    // 펼치기 박스가 이미 좌우 여백을 가지므로 로더의 안쪽 여백·구분선은 뺀다 (팁 카드와 줄맞춤)
+    .phase-loader {
+      padding: var(--so-space-3) 0;
+      border-bottom: 0;
+    }
+  }
+  .result-disclosure {
+    margin-inline: var(--result-inset);
+    border-top: 1px solid var(--so-border-subtle);
+    &__trigger {
+      @include flexbox(space-between, center);
+      gap: var(--so-space-3);
+      min-height: 60px;
+      padding-block: var(--so-space-3);
+      list-style: none;
+      cursor: pointer;
+      font-size: var(--so-type-body);
+      font-weight: 700;
+      color: var(--so-text-title);
+      line-height: 1.5;
+    }
+    &__trigger::-webkit-details-marker {
+      display: none;
+    }
+    &__trigger::after {
+      content: '';
+      flex: 0 0 auto;
+      width: 8px;
+      height: 8px;
+      margin-right: rem(4);
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(45deg);
+    }
+    &[open] > .result-disclosure__trigger::after {
+      transform: rotate(225deg);
+    }
+    &__trigger:focus-visible {
+      outline: 2px solid var(--so-action);
+      outline-offset: 2px;
+      box-shadow: none;
+    }
+  }
+  .result-update-notice {
+    margin: 0 0 var(--so-space-5);
+    padding: var(--so-space-4) var(--result-inset);
+    border-radius: var(--so-radius-md);
+    background: var(--so-warning-subtle);
+    color: var(--so-warning);
+    font-size: var(--so-type-body);
+    line-height: var(--so-leading-body);
+  }
+  .summary-tip-item {
+    font-size: var(--so-type-body);
+    color: var(--so-text);
+    line-height: var(--so-leading-relaxed);
+    border-left: 0;
+    padding: var(--so-space-3) var(--so-space-4);
+    border: 1px solid rgba(109, 81, 205, 0.16);
+    border-radius: var(--so-radius-sm);
+    background: var(--so-surface);
+    margin-bottom: var(--so-space-2);
+  }
+  .qna-question {
+    font-size: var(--so-type-body-lg);
+    color: var(--so-text-title);
+    font-weight: 650;
+    line-height: var(--so-leading-body);
+  }
+  .qna-tip {
+    font-size: var(--so-type-body);
+    line-height: var(--so-leading-body);
+    padding: var(--so-space-3) var(--so-space-4);
+    border-radius: var(--so-radius-sm);
+    background: var(--so-success-subtle);
+    color: var(--so-success);
+  }
+  .qna-claim-detail {
+    font-size: var(--so-type-body);
+    line-height: var(--so-leading-relaxed);
+    border-radius: var(--so-radius-sm);
+    padding: var(--so-space-4);
+    background: var(--so-surface-subtle);
+    border-color: var(--so-border-subtle);
+    color: var(--so-text);
+  }
+  .qna-wrap {
+    padding: var(--so-space-5) var(--result-inset);
+  }
+  .qna-section {
+    padding: var(--so-space-5) 0 0;
+  }
+  .qna-notice {
+    margin: 0;
+    font-size: var(--so-type-body);
+    line-height: var(--so-leading-body);
+    border-radius: var(--so-radius-sm);
+    padding: var(--so-space-4);
+    background: var(--so-warning-subtle);
+    border-color: #f0dcb0;
+    color: var(--so-warning);
+  }
+  .qna-claim-btn {
+    min-height: 44px;
+    padding: 0 var(--so-space-3);
+    border-radius: var(--so-radius-sm);
+    font-size: var(--so-type-label);
+    color: var(--so-text-secondary);
+    border-color: var(--so-border);
+    &:hover {
+      border-color: var(--so-border-strong);
+      color: var(--so-text-title);
+    }
+    &.open {
+      border-color: var(--so-selected-ring);
+      background: var(--so-action-subtle);
+      color: var(--so-action-text);
+    }
+  }
+  .qna-divider {
+    border-top-color: var(--so-border-subtle);
+  }
+  .rider-edit-card {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    min-height: auto;
+    margin-bottom: 0;
+  }
+  .chips-sidebar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--so-space-2);
+    max-height: none;
+    overflow: visible;
+    margin: 0;
+  }
+  .chip-sidebar {
+    align-items: flex-start;
+    width: 100%;
+    min-width: 0;
+    padding: rem(9) rem(10);
+    border: 1px solid var(--so-border-subtle);
+    border-radius: var(--so-radius-sm);
+    background: linear-gradient(135deg, #fbfbff 0%, #f5f7ff 56%, #f4f9f9 100%);
+    color: var(--so-text);
+    font-size: var(--so-type-label);
+    font-weight: 560;
+    line-height: 1.48;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  .chip-remove-sidebar {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin: rem(-3) rem(-3) rem(-3) auto;
+    flex: 0 0 auto;
+    border: 0;
+    background: none;
+    border-radius: 50%;
+    color: var(--so-text-secondary);
+    font-size: 22px;
+    line-height: 1;
+    &:hover {
+      background: var(--so-danger-subtle);
+      color: var(--so-danger);
+    }
+  }
+  .sidebar-combobox {
+    position: relative;
+    margin-top: var(--so-space-4);
+  }
+  .sidebar-search-input {
+    width: 100%;
+    padding-right: rem(40);
+  }
+  .sidebar-search-popover {
+    position: absolute;
+    z-index: 100;
+    top: calc(100% + var(--so-space-2));
+    left: 0;
+    right: 0;
+    overflow: hidden;
+    border: 1px solid var(--so-border-strong);
+    border-radius: var(--so-radius-md);
+    background: var(--so-surface);
+    box-shadow: 0 14px 36px rgba(53, 61, 96, 0.16);
+  }
+  .sidebar-search-listbox {
+    max-height: min(416px, 54vh);
+    margin: 0;
+    padding: var(--so-space-1);
+    overflow-y: auto;
+    list-style: none;
+  }
+  .sidebar-search-option {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--so-space-2);
+    min-height: 48px;
+    padding: rem(11) rem(12);
+    border-radius: var(--so-radius-sm);
+    color: var(--so-text);
+    font-size: var(--so-type-label);
+    line-height: 1.45;
+    cursor: pointer;
+    + .sidebar-search-option {
+      margin-top: rem(2);
+    }
+    &:hover,
+    &.active {
+      background: var(--so-action-subtle);
+      color: var(--so-text-title);
+      box-shadow: inset 0 0 0 1px var(--so-selected-ring);
+      font-weight: 620;
+    }
+    &__name {
+      flex: 1 1 auto;
+      min-width: 0;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+    .badge {
+      flex: 0 0 auto;
+      margin-top: rem(1);
+    }
+  }
+  .sidebar-search-empty {
+    margin: 0;
+    padding: var(--so-space-5);
+    color: var(--so-text-secondary);
+    font-size: var(--so-type-label);
+    line-height: var(--so-leading-body);
+    text-align: center;
+  }
+  .product-selector-bar,
+  .profile-selector__field {
+    position: relative;
+  }
+  .product-selector-select,
+  .profile-selector__select {
+    display: block;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .profile-selector__select {
+    line-height: calc(var(--so-control-h) - 2px);
+  }
+  .profile-selector__select[aria-expanded='true'] {
+    border-color: var(--so-action);
+    box-shadow: var(--so-ring);
+  }
+  .select-listbox {
+    position: absolute;
+    z-index: 100;
+    top: calc(100% + var(--so-space-2));
+    left: 0;
+    right: 0;
+    max-height: min(416px, 54vh);
+    margin: 0;
+    padding: var(--so-space-1);
+    overflow-y: auto;
+    list-style: none;
+    border: 1px solid var(--so-border-strong);
+    border-radius: var(--so-radius-md);
+    background: var(--so-surface);
+    box-shadow: 0 14px 36px rgba(53, 61, 96, 0.16);
+  }
+  .select-option {
+    display: flex;
+    align-items: center;
+    gap: var(--so-space-2);
+    min-height: 48px;
+    padding: rem(11) rem(40) rem(11) rem(12);
+    position: relative;
+    border-radius: var(--so-radius-sm);
+    color: var(--so-text);
+    font-size: var(--so-type-body);
+    line-height: 1.45;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    + .select-option {
+      margin-top: rem(2);
+    }
+    &.active {
+      background: var(--so-action-subtle);
+      color: var(--so-text-title);
+      box-shadow: inset 0 0 0 1px var(--so-selected-ring);
+    }
+    &.selected {
+      color: var(--so-action-text);
+      font-weight: 650;
+      &::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        right: rem(14);
+        width: 16px;
+        height: 16px;
+        transform: translateY(-50%);
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b4cc4' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5 10 17.5 19 7'/%3E%3C/svg%3E") no-repeat center / contain;
+      }
+    }
+  }
+  .badge {
+    font-size: var(--so-type-meta);
+    padding: 3px var(--so-space-2);
+    border-radius: var(--so-radius-xs);
+    font-weight: 650;
+    &.ai {
+      background: var(--so-ai-subtle);
+      color: var(--so-ai);
+    }
+  }
+  .label-small {
+    font-size: var(--so-type-label);
+    color: var(--so-text-secondary);
+  }
+  .value-small {
+    font-size: var(--so-type-body);
+    color: var(--so-text-title);
+  }
+  .profile-compact-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--so-space-4);
+  }
+  .profile-compact-item {
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+  .back-btn {
+    min-height: var(--so-control-h);
+    padding: 0 var(--so-space-4);
+    border: 1px solid var(--so-border);
+    border-radius: var(--so-radius-sm);
+    font-size: var(--so-type-label);
+    color: var(--so-text-secondary);
+    background: var(--so-surface);
+  }
+  .sidebar-update-btn {
+    min-height: var(--so-control-h);
+    padding: 0 var(--so-space-4);
+    border-radius: var(--so-radius-sm);
+    font-size: var(--so-type-body);
+    font-weight: 750;
+    background: var(--so-gradient-brand);
+    box-shadow: var(--so-shadow-brand);
+    transition: background var(--so-base) var(--so-ease), box-shadow var(--so-base) var(--so-ease);
+    &:hover:not(:disabled) {
+      background: var(--so-gradient-brand-hover);
+    }
+    &:disabled {
+      background: var(--so-surface-inset);
+      color: var(--so-text-disabled);
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+  }
+  .toast {
+    padding: var(--so-space-3) var(--so-space-5);
+    border-radius: var(--so-radius-sm);
+    font-size: var(--so-type-body);
+    font-weight: 500;
+    &.error {
+      background: var(--so-danger);
+    }
+    &.success {
+      background: var(--so-success);
+    }
+  }
+  .phase-loader {
+    font-size: var(--so-type-body);
+    color: var(--so-text);
+    padding: var(--so-space-5) var(--so-space-6);
+    border-bottom-color: var(--so-border-subtle);
+  }
+  .loader {
+    border-color: var(--so-border);
+    border-top-color: var(--so-action);
+  }
+  .coming-soon-card {
+    border-radius: var(--so-radius-lg);
+    border-color: var(--so-border-subtle);
+    box-shadow: var(--so-shadow-2);
+  }
+  .coming-soon-title {
+    font-size: var(--so-type-page);
+    color: var(--so-text-title);
+    line-height: var(--so-leading-tight);
+  }
+  .coming-soon-desc {
+    font-size: var(--so-type-body);
+    color: var(--so-text);
+    line-height: var(--so-leading-body);
+  }
+  .coming-soon-back-btn {
+    min-height: var(--so-control-h);
+    padding: 0 var(--so-space-6);
+    border-radius: var(--so-radius-sm);
+    background: var(--so-gradient-brand);
+    font-size: var(--so-type-body);
+    font-weight: 650;
+    box-shadow: var(--so-shadow-brand);
+    &:hover {
+      background: var(--so-gradient-brand-hover);
+    }
+  }
+}
+
+@media (max-width: 1027px) {
+  .app-root {
+    .logo-main {
+      font-size: 19px;
+    }
+    .tab {
+      font-size: var(--so-type-body);
+      padding: 0;
+    }
+    .highlight-headline {
+      font-size: var(--so-type-card);
+    }
+    .highlight-detail {
+      font-size: var(--so-type-body);
+    }
+    .bar-label,
+    .bar-value {
+      font-size: var(--so-type-label);
+    }
+    .summary-tip-item {
+      font-size: var(--so-type-body);
+    }
+    .mobile-top-summary {
+      padding: var(--so-space-4) var(--so-gutter);
+      background: var(--so-surface);
+      border-bottom: 1px solid var(--so-border-subtle);
+      display: flex;
+      flex-direction: column;
+      gap: var(--so-space-4);
+    }
+    .summary-lead {
+      display: flex;
+      align-items: center;
+      gap: var(--so-space-2);
+      min-width: 0;
+    }
+    .summary-return {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--so-space-2);
+      align-self: flex-start;
+      width: auto;
+      max-width: 100%;
+      min-width: 0;
+      min-height: var(--so-control-h);
+      margin-left: rem(-10);
+      padding: 0;
+      border: 0;
+      border-radius: var(--so-radius-md);
+      background: none;
+      color: var(--so-text-secondary);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: color var(--so-fast) var(--so-ease);
+      &__icon {
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        width: var(--so-control-h);
+        height: var(--so-control-h);
+        border-radius: var(--so-radius-sm);
+        transition: background var(--so-fast) var(--so-ease), color var(--so-fast) var(--so-ease);
+      }
+      &__icon svg {
+        width: 22px;
+        height: 22px;
+      }
+      &:hover {
+        color: var(--so-text-title);
+      }
+      &:hover .summary-return__icon {
+        background: var(--so-surface-subtle);
+      }
+      &:hover .summary-profile {
+        border-color: var(--so-action-text);
+      }
+      &:active .summary-profile {
+        transform: translateY(1px);
+      }
+      &:focus-visible {
+        outline: 3px solid var(--so-brand-ring);
+        outline-offset: 2px;
+      }
+    }
+    .summary-profile {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--so-space-2);
+      min-width: 0;
+      padding: rem(6) rem(12) rem(6) rem(8);
+      border-radius: 999px;
+      background: var(--so-gradient-selected-surface);
+      border: 1px solid var(--so-selected-ring);
+      &__icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        flex: 0 0 auto;
+        background: var(--so-gradient-brand);
+        color: #fff;
+        display: grid;
+        place-items: center;
+      }
+      &__icon svg {
+        width: 14px;
+        height: 14px;
+      }
+      &__value {
+        font-size: var(--so-type-label);
+        font-weight: 700;
+        color: var(--so-action-text);
+        white-space: nowrap;
+      }
+    }
+    .summary-notes {
+      margin: 0;
+      font-size: var(--so-type-body);
+      color: var(--so-text-secondary);
+      line-height: var(--so-leading-body);
+      overflow-wrap: anywhere;
+    }
+    .summary-riders {
+      display: flex;
+      align-items: center;
+      gap: var(--so-space-2);
+      &__count {
+        display: inline-flex;
+        align-items: center;
+        gap: rem(5);
+        font-size: var(--so-type-label);
+        font-weight: 700;
+        color: var(--so-text-secondary);
+        white-space: nowrap;
+      }
+      &__count b {
+        color: var(--so-action-text);
+      }
+      &__count svg {
+        width: 15px;
+        height: 15px;
+        color: var(--so-action);
+        flex: 0 0 auto;
+      }
+    }
+    .rider-headlink {
+      position: relative;
+      margin-left: auto;
+      flex: 0 0 auto;
+      min-height: 32px;
+      padding: 0 rem(10);
+      border-radius: var(--so-radius-xs);
+      border: 1px solid var(--so-selected-ring);
+      background: var(--so-gradient-selected-surface);
+      color: var(--so-action-text);
+      font-size: var(--so-type-label);
+      font-weight: 650;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: rem(5);
+      white-space: nowrap;
+      &::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: var(--so-control-h);
+        transform: translateY(-50%);
+      }
+      &:hover {
+        background: var(--so-action-subtle);
+      }
+    }
+    .rider-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--so-space-2);
+    }
+    .mobile-top-summary[data-expanded='false'] .rider-list__item:nth-child(n + 4) {
+      display: none;
+    }
+    .rider-list {
+      &__item {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: var(--so-space-2);
+        align-items: start;
+        padding: rem(9) rem(12);
+        border-radius: var(--so-radius-sm);
+        background: var(--so-surface-subtle);
+        border: 1px solid var(--so-border);
+      }
+      &__no {
+        font-size: var(--so-type-meta);
+        font-weight: 700;
+        color: var(--so-action-text);
+        background: var(--so-action-subtle);
+        border-radius: var(--so-radius-xs);
+        padding: rem(1) rem(6);
+        margin-top: rem(2);
+      }
+      &__name {
+        font-size: var(--so-type-label);
+        line-height: 1.45;
+        color: var(--so-text-title);
+        font-weight: 650;
+        overflow-wrap: anywhere;
+      }
+      &__sub {
+        display: block;
+        font-weight: 400;
+        color: var(--so-text-tertiary);
+        font-size: var(--so-type-meta);
+      }
+    }
+    .rider-more {
+      align-self: stretch;
+      min-height: var(--so-control-h);
+      border-radius: var(--so-radius-sm);
+      border: 1px dashed var(--so-selected-ring);
+      background: none;
+      color: var(--so-action-text);
+      font-size: var(--so-type-label);
+      font-weight: 650;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--so-space-2);
+      &:hover {
+        background: var(--so-gradient-selected-surface);
+      }
+    }
+    .summary-chevron {
+      width: 15px;
+      height: 15px;
+      flex: 0 0 auto;
+      transition: transform var(--so-base) var(--so-ease);
+    }
+    .mobile-top-summary {
+      &[data-expanded='true'] .summary-chevron {
+        transform: rotate(180deg);
+      }
+      :focus-visible {
+        outline: 3px solid var(--so-brand-ring);
+        outline-offset: 2px;
+      }
+    }
+    .selection-view {
+      padding: var(--so-space-5) var(--so-gutter) 0;
+    }
+    .content {
+      padding: var(--so-space-5) var(--so-gutter);
+    }
+    .rider-grid-large {
+      grid-template-columns: 1fr;
+    }
+    .profile-selector {
+      padding: 0;
+      gap: var(--so-space-3);
+    }
+    .selection-footer {
+      padding: var(--so-space-3) var(--so-gutter);
+      padding-bottom: max(var(--so-space-3), env(safe-area-inset-bottom, 0px));
+    }
+    .main-generate-btn {
+      padding: 0;
+    }
+    .category-pills-wrap {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scroll-snap-type: x proximity;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      &::-webkit-scrollbar {
+        display: none;
+      }
+    }
+    .cat-pill {
+      scroll-snap-align: start;
+      flex: 0 0 auto;
+    }
+    .category-filter {
+      &.has-overflow .category-pills-wrap {
+        padding-right: rem(58);
+        scroll-padding-inline-end: 58px;
+      }
+      &.has-overflow::before {
+        content: '';
+        position: absolute;
+        z-index: 5;
+        top: 0;
+        right: 0;
+        width: calc(var(--so-control-h) + var(--so-space-2));
+        height: var(--so-control-h);
+        background: var(--so-page);
+        pointer-events: none;
+      }
+      &.has-overflow::after {
+        content: '';
+        position: absolute;
+        z-index: 5;
+        top: 0;
+        right: calc(var(--so-control-h) + var(--so-space-2));
+        height: var(--so-control-h);
+        width: 28px;
+        background: linear-gradient(90deg, transparent, var(--so-page));
+        pointer-events: none;
+      }
+      &.is-expanded::before,
+      &.is-expanded::after {
+        opacity: 0;
+      }
+      &.is-expanded .category-pills-wrap {
+        flex-wrap: wrap;
+        overflow-x: visible;
+        scroll-snap-type: none;
+        row-gap: var(--so-space-2);
+        padding-right: rem(58);
+      }
+      &.is-expanded .category-pills-wrap.is-measuring,
+      .category-pills-wrap.is-measuring {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+      }
+    }
+  }
+}
+
+@media (min-width: 760px) {
+  .app-root .profile-selector__fields {
+    grid-template-columns: minmax(220px, 0.8fr) minmax(320px, 1.2fr);
+    align-items: start;
+  }
+}
+
+@media (min-width: 851px) and (max-width: 1027px) {
+  .app-root {
+    .container {
+      flex: 0 0 auto;
+      flex-direction: column;
+      min-height: calc(100dvh - 60px - 64px);
+      overflow: visible;
+    }
+    .desktop-only {
+      display: none !important;
+    }
+    .sidebar {
+      display: none !important;
+    }
+    .content {
+      flex: 0 0 auto;
+      min-height: 0;
+      order: 1;
+      padding: var(--so-space-5) var(--so-gutter);
+      overflow-y: visible;
+    }
+    .rider-grid-large {
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+  }
+}
+
+@media (min-width: 1028px) {
+  .app-root {
+    .selection-footer {
+      align-self: stretch;
+      width: 100%;
+      padding: var(--so-space-4) 0;
+      padding-bottom: max(var(--so-space-3), env(safe-area-inset-bottom, 0px));
+      border: 0;
+      border-top: 1px solid var(--so-border-subtle);
+      border-radius: 0;
+      background: rgba(249, 249, 255, 0.92);
+      box-shadow: none;
+      backdrop-filter: blur(12px);
+    }
+    .main-generate-btn {
+      min-height: 56px;
+      padding: 0 var(--so-space-6);
+      border-radius: var(--so-radius-md);
+    }
+    .container {
+      display: grid;
+      gap: var(--so-space-6);
+      width: calc(100% - var(--so-edge) - var(--so-edge));
+      flex: 0 0 auto;
+      align-items: start;
+      min-height: calc(100dvh - 60px - 64px);
+      max-width: none;
+      margin: 0 auto;
+      padding: 0;
+      overflow: visible;
+    }
+    .sidebar {
+      grid-column: 1;
+      grid-row: 1;
+      order: 1;
+      width: auto;
+      min-width: 0;
+      padding: var(--so-space-6) var(--so-space-3);
+      overflow-y: visible;
+      border: 0;
+      border-right: 1px solid var(--so-border-subtle);
+      background: var(--so-surface-subtle);
+    }
+    .content {
+      grid-row: 1;
+      order: 2;
+      min-width: 0;
+      padding: var(--so-space-6) 0 var(--so-space-8);
+      overflow-y: visible;
+    }
+    .sidebar-search-popover {
+      top: auto;
+      bottom: calc(100% + var(--so-space-2));
+    }
+  }
+}
+
+@media (max-width: 560px) {
+  .app-root {
+    .content {
+      --result-inset: 16px;
+    }
+    .main-generate-btn {
+      width: 100%;
+      max-width: none;
+    }
+    .consultation-opening {
+      padding: var(--so-space-5) var(--result-inset);
+      &__header {
+        display: grid;
+        gap: var(--so-space-3);
+      }
+    }
+    .scripts-list-heading {
+      align-items: flex-start;
+    }
+    .script-accordion-trigger {
+      grid-template-columns: auto minmax(0, 1fr) 20px;
+      align-items: start;
+      gap: var(--so-space-2);
+      padding: var(--so-space-3);
+      &__action {
+        justify-self: center;
+        padding-block: rem(4);
+      }
+    }
+    .script-accordion-trigger__label,
+    .script-accordion-panel .script-claim-action-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: rem(-1);
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+    .script-accordion-panel {
+      grid-template-columns: minmax(0, 1fr);
+      min-width: 0;
+      padding: 0 var(--so-space-3) var(--so-space-3);
+      .qna-claim-btn {
+        width: 100%;
+        min-width: 0;
+        justify-content: center;
+        gap: var(--so-space-2);
+      }
+      .qna-claim-btn svg {
+        flex: 0 0 auto;
+      }
+      .qna-claim-detail {
+        margin-bottom: 0;
+      }
+      .script-talk-block {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-root {
+    .rider-card-large,
+    .main-generate-btn,
+    .tab::after {
+      transition: none;
+    }
+    .category-expand-toggle,
+    .category-expand-icon {
+      transition: none;
+    }
+    .category-expand-toggle:hover {
+      transform: none;
+    }
+    .rider-card-large:hover {
+      transform: none;
+    }
+    .summary-return {
+      transition: none;
+      &__icon {
+        transition: none;
+      }
+      &:active .summary-profile {
+        transform: none;
+      }
+    }
+    .script-accordion-item,
+    .script-accordion-trigger,
+    .script-accordion-trigger__chevron {
+      transition: none;
+    }
+  }
+}
+
+@media (min-width: 1028px) {
+  .app-root {
+    .sidebar {
+      display: none;
+    }
+    .container {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .content {
+      grid-column: 1;
+    }
+  }
 }
 </style>

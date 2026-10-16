@@ -1,0 +1,304 @@
+--- 반입_코칭트랙_매핑업로드_20261011/front/coaching-track.vue	2026-10-12 12:53:58
++++ asp-fc-search-front/pages/sales/coaching-track.vue	2026-10-15 16:10:44
+@@ -7,6 +7,10 @@
+ ]
+ 
+ const RIDER_BATCH_SIZE = 10
++// 결과 화면 화법 카드: 처음 9개, 더보기마다 9개씩 (묶음 3개 × 동시 3요청 = 한 번에 만들어지는 양)
++const SCRIPT_BATCH_SIZE = 9
++// 화법 요청 1번에 보낼 특약 수 (백엔드가 3개씩 묶어 동시 3개로 LLM 호출 → 9개가 한 번에 응답)
++const SCRIPT_PAGE_SIZE = SCRIPT_BATCH_SIZE
+ const SUMMARY_VISIBLE_RIDERS = 3
+ 
+ const BAR_COLORS = ['#2563eb', '#0891b2', '#6366f1', '#0d9488', '#7c3aed', '#1d4ed8']
+@@ -53,6 +57,13 @@
+       riderIdByCode: {},
+ 
+       isGenerating: false,
++      // 화법 전체 건수 (요청한 특약 수, 생성 중엔 고정 · 끝나면 실제 받은 수)
++      scriptTotalCount: 0,
++      // 화법 페이지(9개씩). scriptPages[i] 가 undefined 면 아직 생성 중, 배열이면 끝남(실패면 빈 배열)
++      scriptPageCount: 0,
++      scriptPages: [],
++      // 화면에 펼친 페이지 수
++      scriptRevealedPages: 1,
+       generatedScript: null,
+       resultRiders: [],
+       resultFilters: { age: '30대', gender: '남성', notes: '' },
+@@ -131,6 +142,22 @@
+     remainingRiderCount() {
+       return Math.max(0, this.filteredRiders.length - this.visibleRiders.length)
+     },
++    // 첫 페이지(9개) 응답이 왔는지 → 오면 9개를 한꺼번에 표시
++    firstScriptPageReady() {
++      return Array.isArray(this.scriptPages[0])
++    },
++    // 펼친 페이지의 화법만
++    visibleRiderScripts() {
++      return this.scriptPages.slice(0, this.scriptRevealedPages).flatMap((page) => page ?? [])
++    },
++    // 아직 안 펼친 페이지가 있는지 → 더보기 영역 표시
++    hasMoreScriptPages() {
++      return this.scriptRevealedPages < this.scriptPageCount
++    },
++    // 다음 페이지 응답이 왔는지 → 왔으면 "더보기", 아니면 로딩
++    isNextScriptPageReady() {
++      return Array.isArray(this.scriptPages[this.scriptRevealedPages])
++    },
+     showRiderLoadMore() {
+       return !this.riderGridHasThreeColumns && this.filteredRiders.length > RIDER_BATCH_SIZE
+     },
+@@ -253,6 +280,16 @@
+   },
+ 
+   async mounted() {
++    // TODO(임시·커밋 금지): 사랑온 브릿지 진입 URL 확인용 (모바일이라 콘솔 대신 토스트)
++    {
++      const { presetKey: pk, sarangOnDataKey: sk } = this.$route.query
++      const k = pk || sk
++      this.showToast(
++        `[진입 URL]\n${window.location.href}\n\n[읽은 키] ${k ? `${String(k).length}자 ${String(k).slice(0, 10)}…` : '없음'}\n[쿼리 이름] ${Object.keys(this.$route.query).join(', ') || '없음'}`,
++        'debug',
++        30000
++      )
++    }
+     this.$nextTick(this.observeSelectionLayout)
+     document.addEventListener('pointerdown', this.handleSidebarPointerDown)
+     await this.fetchProductCodes()
+@@ -383,13 +420,13 @@
+         this.selectedRiders = [...new Set(ids)]
+         if (this.selectedRiders.length > 0) this.showSelectedOnly = true
+ 
++        // age 는 백엔드가 ageOptions 값으로 내려준다. 직업은 특이사항에 자동 입력 (job 을 따로 넘기면 생성 프롬프트에 중복)
+         const { age, gender, job } = res.profile ?? {}
+-        const presetAge = /^([6-9]\d|1\d\d)대$/.test(age ?? '') ? '60대+' : age
+         this.filters = {
+           ...this.filters,
+-          age: this.ageOptions.includes(presetAge) ? presetAge : this.filters.age,
++          age: this.ageOptions.includes(age) ? age : this.filters.age,
+           gender: this.genderOptions.includes(gender) ? gender : this.filters.gender,
+-          ...(job ? { job } : {}),
++          ...(job ? { notes: job } : {}),
+         }
+ 
+         const missing = presetCodes.filter((code) => !toId(code)).length + (res.unmapped ?? []).length
+@@ -631,6 +668,10 @@
+     async generate() {
+       this.isGenerating = true
+       this.generatedScript = { designSummary: undefined, riderScripts: [], qna: [] }
++      this.scriptTotalCount = 0
++      this.scriptPageCount = 0
++      this.scriptPages = []
++      this.scriptRevealedPages = 1
+ 
+       let riders
+       try {
+@@ -657,15 +698,10 @@
+         })
+         .catch(() => {})
+ 
+-      const scriptsP = this.$axios.post('/coaching/generate/scripts', payload)
+-        .then((s2) => {
+-          const prev = this.generatedScript.designSummary ?? { highlights: [], statistics: [] }
+-          this.generatedScript = {
+-            ...this.generatedScript,
+-            riderScripts: s2.riderScripts ?? [],
+-            designSummary: { ...prev, tips: s2.tips ?? [] },
+-          }
+-        })
++      // 특약 9개씩 순서대로 요청 → 페이지 단위로 화면에 표시
++      const scriptsP = this.generateScriptsInPages(payload)
++        // 영업 꿀팁: 만들어진 화법 전부 + 고객정보로 별도 생성
++        .then((riderScripts) => this.fetchTips(payload.profile, riderScripts))
+ 
+       const qnaP = this.$axios.post('/coaching/generate/qna', payload)
+         .then((s3) => {
+@@ -681,8 +717,61 @@
+         this.showToast(`화법 생성에 실패했습니다: ${msg}`, 'error', 5000)
+       } finally {
+         this.isGenerating = false
++      }
++    },
++    // 특약별 화법: 9개씩 잘라 /generate/scripts 를 "하나씩 순서대로" 호출
++    //   - 요청 1번 = 9개 → 백엔드가 3개씩 묶어 동시 3개 LLM 호출 → 9개가 한 번에 응답 (동시 LLM 호출은 항상 3개)
++    //   - 첫 페이지가 오면 바로 표시하고, 사용자가 읽는 동안 다음 페이지를 이어서 생성
++    //   - 페이지 하나가 실패하면 빈 페이지로 두고 다음 페이지 계속, 전부 실패하면 에러
++    async generateScriptsInPages(payload) {
++      const usable = payload.riders.filter((r) => r.has_reason)
++      if (usable.length === 0) throw new Error('지급사유가 있는 특약이 없어 화법을 생성할 수 없습니다.')
++
++      const pages = []
++      for (let i = 0; i < usable.length; i += SCRIPT_PAGE_SIZE) pages.push(usable.slice(i, i + SCRIPT_PAGE_SIZE))
++      this.scriptTotalCount = usable.length
++      this.scriptPageCount = pages.length
++      this.scriptPages = new Array(pages.length).fill(undefined)
++
++      const received = []
++      const errors = []
++      for (let i = 0; i < pages.length; i++) {
++        let list = []
++        try {
++          // 공통 에러 처리(404 → 에러 페이지, 422/500 → 재접속)를 타지 않도록 상태는 직접 처리
++          const res = await this.$axios.post('/coaching/generate/scripts', { ...payload, riders: pages[i] }, { validateStatus: () => true })
++          list = Array.isArray(res?.riderScripts) ? res.riderScripts : []
++          if (list.length === 0) errors.push(res?.detail || '화법 응답이 비어 있습니다.')
++        } catch (e) {
++          errors.push(e?.message ?? String(e))
++        }
++        received.push(...list)
++        this.scriptPages = this.scriptPages.map((page, idx) => (idx === i ? list : page))
++        this.generatedScript = { ...this.generatedScript, riderScripts: [...received] }
+       }
++
++      if (errors.length) console.error('[coaching-track] 화법 페이지 실패:', errors)
++      // 빈 페이지(실패)는 건너뛰고 받은 화법만으로 다시 9개씩 나눔
++      this.scriptTotalCount = received.length
++      const regrouped = []
++      for (let i = 0; i < received.length; i += SCRIPT_PAGE_SIZE) regrouped.push(received.slice(i, i + SCRIPT_PAGE_SIZE))
++      this.scriptPages = regrouped
++      this.scriptPageCount = regrouped.length
++      if (received.length === 0) throw new Error(typeof errors[0] === 'string' ? errors[0] : '화법을 생성하지 못했습니다.')
++      return received
+     },
++    // 영업 꿀팁. 실패해도 화법 결과에는 영향 없이 섹션만 숨김 (tips 가 비면 v-if 로 안 보임)
++    async fetchTips(profile, riderScripts) {
++      try {
++        // 공통 에러 처리(404 → 에러 페이지, 422/500 → 재접속)를 타지 않도록 모든 상태를 직접 처리
++        const res = await this.$axios.post('/coaching/generate/tips', { profile, riderScripts }, { validateStatus: () => true })
++        const tips = Array.isArray(res?.tips) ? res.tips.filter((t) => typeof t === 'string' && t.trim()) : []
++        const prev = this.generatedScript.designSummary ?? { highlights: [], statistics: [] }
++        this.generatedScript = { ...this.generatedScript, designSummary: { ...prev, tips } }
++      } catch (e) {
++        console.error('[coaching-track] 영업 꿀팁 생성 실패:', e)
++      }
++    },
+ 
+     handleResultTabKeydown(event) {
+       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+@@ -1062,7 +1151,7 @@
+             :aria-disabled="remainingRiderCount === 0 ? 'true' : 'false'"
+             @click="remainingRiderCount > 0 && showMoreRiders()"
+           >
+-            <span>{{ remainingRiderCount > 0 ? `전체 ${filteredRiders.length}개 더보기` : `전체 ${filteredRiders.length}개 표시됨` }}</span>
++            <span>{{ remainingRiderCount > 0 ? `더보기 (${remainingRiderCount}개)` : `전체 ${filteredRiders.length}개 표시됨` }}</span>
+           </button>
+         </div>
+       </div>
+@@ -1181,7 +1270,7 @@
+               </div>
+             </div>
+ 
+-            <details v-if="generatedScript.designSummary.statistics?.length" class="result-disclosure">
++            <details v-if="generatedScript.designSummary.statistics?.length" class="result-disclosure" open>
+               <summary class="result-disclosure__trigger">상담에 참고할 통계</summary>
+               <div class="stats-row">
+               <div
+@@ -1255,7 +1344,7 @@
+               </div>
+             </details>
+ 
+-            <details v-if="generatedScript.designSummary.tips?.length || isGenerating" class="result-disclosure">
++            <details v-if="generatedScript.designSummary.tips?.length || isGenerating" class="result-disclosure result-disclosure--tips">
+               <summary class="result-disclosure__trigger">영업 꿀팁<span v-if="isGenerating && !generatedScript.designSummary.tips?.length"> · 생성 중</span></summary>
+               <div class="summary-tips-block">
+               <div v-if="isGenerating && !generatedScript.designSummary.tips?.length" class="phase-loader">
+@@ -1290,22 +1379,22 @@
+         <div id="result-panel" role="tabpanel" :aria-labelledby="`result-tab-${activeTab}`" tabindex="0" :aria-busy="isGenerating ? 'true' : 'false'">
+         <div v-if="generatedScript" class="script-box">
+           <template v-if="activeTab === 'script'">
+-            <div v-if="isGenerating && !generatedScript.riderScripts.length" class="phase-loader">
++            <div v-if="isGenerating && !firstScriptPageReady" class="phase-loader">
+               <div class="loader"></div>
+               <span>특약별 화법을 생성 중입니다...</span>
+             </div>
+ 
+-            <div v-if="generatedScript.riderScripts.length" class="scripts-wrap">
++            <div v-if="firstScriptPageReady && (visibleRiderScripts.length || hasMoreScriptPages)" class="scripts-wrap">
+               <div class="scripts-list-heading">
+                 <div>
+                   <h2>특약별 화법 상세보기</h2>
+                 </div>
+-                <span class="scripts-list-heading__count">{{ generatedScript.riderScripts.length }}건</span>
++                <span class="scripts-list-heading__count">{{ scriptTotalCount || generatedScript.riderScripts.length }}건</span>
+               </div>
+ 
+               <section
+-                v-for="(rs, index) in generatedScript.riderScripts"
+-                :key="rs.name"
++                v-for="(rs, index) in visibleRiderScripts"
++                :key="rs.jar_rd_code || rs.name"
+                 class="script-accordion-item"
+                 :class="{ open: expandedScriptNames.includes(rs.name) }"
+               >
+@@ -1371,6 +1460,21 @@
+                   <div class="script-talk-block">{{ rs.talk }}</div>
+                 </div>
+               </section>
++
++              <!-- 다음 9개가 준비됐으면 "더보기"(선택 화면의 .rider-load-more 재사용),
++                   아직이면 같은 자리에 상단과 같은 로딩(동그라미 + "특약별 화법을 생성 중입니다...") -->
++              <button
++                v-if="hasMoreScriptPages && isNextScriptPageReady"
++                type="button"
++                class="rider-load-more"
++                @click="scriptRevealedPages++"
++              >
++                <span>더보기</span>
++              </button>
++              <div v-else-if="hasMoreScriptPages" class="phase-loader">
++                <div class="loader"></div>
++                <span>특약별 화법을 생성 중입니다...</span>
++              </div>
+             </div>
+           </template>
+ 
+@@ -1681,6 +1785,12 @@
+   flex-direction: column;
+ }
+ 
++// 결과 화면 상단 "특약 N건 + 전체보기" 줄과 그 아래 특약 목록 숨김
++.summary-riders,
++#summary-rider-list {
++  display: none !important;
++}
++
+ .back-btn {
+   cursor: pointer;
+   margin-bottom: rem(16);
+@@ -1943,6 +2053,7 @@
+ .loader {
+   width: 28px;
+   height: 28px;
++  flex-shrink: 0; // 좁은 화면에서 옆 문구가 줄바꿈될 때 찌그러져 타원이 되지 않도록
+   display: inline-block;
+   border: 3px solid #e2e8f0;
+   border-radius: 50%;
+@@ -2195,6 +2306,16 @@
+   text-align: center;
+   &.info {
+     background: #334155;
++  }
++  // TODO(임시·커밋 금지): 진입 URL 디버그 토스트
++  &.debug {
++    background: #111827;
++    max-width: 92vw;
++    text-align: left;
++    white-space: pre-wrap;
++    word-break: break-all;
++    font-size: 12px !important;
++    user-select: text;
+   }
+ }
+ @keyframes coaching-track-slideUp {
+@@ -3335,6 +3456,11 @@
+   .summary-tips-block {
+     padding: 0 0 var(--so-space-4);
+     background: none;
++    // 펼치기 박스가 이미 좌우 여백을 가지므로 로더의 안쪽 여백·구분선은 뺀다 (팁 카드와 줄맞춤)
++    .phase-loader {
++      padding: var(--so-space-3) 0;
++      border-bottom: 0;
++    }
+   }
+   .result-disclosure {
+     margin-inline: var(--result-inset);

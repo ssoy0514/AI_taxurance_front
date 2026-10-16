@@ -1,11 +1,15 @@
 <script>
-import { renderMarkdown } from '@/utils/markdown'
+import { renderMarkdownTaxurance } from '@/utils/markdown'
 import RightView from '@/components/RightView.vue'
 import Images from '@/components/Images.vue'
 import Video from '@/components/Video.vue'
 import Link from '@/components/Link.vue'
 import StepDots from '@/components/StepDots.vue'
 import { TYPE_SURVEY_QUESTIONS, TYPE_SURVEY_RESULTS } from '@/utils/taxuranceTypeSurveyData'
+// [0920 수정]
+import { fetchLocalStream, fetchLocalStreamReplacing, stopLocalStreams } from '@/utils/localStream'
+
+const TAXURANCE_FORCE_BREAK_MARKERS = ['<b>[핵심]</b>', '<b>[신뢰도 UP]</b>', '<b>[이것만은 꼭!]</b>']
 
 export default {
   name: 'Taxurance',
@@ -66,6 +70,9 @@ export default {
       ticker: null,
 
       openingMsg: { content: '', isTrans: false, transText: '' }, // 오프닝 멘트(llm1) 결과 + 번역 상태
+
+      // [0920 수정]
+      streamControllers: [], // 이 컴포넌트가 띄운 스트림들의 AbortController (다른 페이지의 $stream과 무관)
     }
   },
   computed: {
@@ -162,7 +169,9 @@ export default {
   },
 
   methods: {
-    renderMarkdown,
+    renderMarkdown(text, isTranslation = false) {
+      return renderMarkdownTaxurance(text, TAXURANCE_FORCE_BREAK_MARKERS, isTranslation)
+    },
 
     //  실제 백엔드 연결되어 가드(═══)/return 제거하고 실호출로 전환.
     // interest(문자열) -> interests(배열)로 파라미터 형태도 백엔드 스키마에 맞게 변경.
@@ -172,9 +181,11 @@ export default {
         // sex는 DB 필터링이 아니라 LLM 프롬프트 톤 조정용이라(filter_speechdoc_rows에 sex 파라미터
         // 자체가 없음) 관련자료 조회엔 넣지 않는다.
         const { items, succ } = await this.$axios.post('/taxurance/contents', {
-          interests: [this.resultFilters.interest],
+          // [0923 수정] 선택한 관심분야 외에 '공통' 자료도 항상 같이 조회되도록
+          interests: [this.resultFilters.interest, '공통'],
           age_tags: [this.resultFilters.age],
-          consider_options: this.resultFilters.considerations,
+          // [0923 수정] 특이사항 목록 맨 뒤에 '공통'도 항상 추가
+          consider_options: [...this.resultFilters.considerations, '공통'],
         })
         if (succ) {
           this.toggleRelatedDataMapping(true, items)
@@ -198,15 +209,23 @@ export default {
       })
       const last = this.messages[this.messages.length - 1]
 
+      // [0921 수정] design-bible.vue랑 같은 방식: 'sec'(채팅 수정)일 때만 수정된 resultFilters를
+      // 쓰고, 'first'/'re'는 항상 원본 this.filters를 씀 - 그래서 "다른 화법"(재생성)은 채팅
+      // 수정 이력과 무관하게 항상 맨 처음 폼 값으로 되돌아감 (initialRequirement 같은 별도
+      // 필드로 따로 기억해뒀다가 복원할 필요가 없어짐)
+      const baseFilters = this.submitType === 'sec' ? this.resultFilters : this.filters
+
       try {
         if (this.submitType === 'first') {
           try {
             const openingData = await this.$axios.post('/taxurance/opening/make', {
-              sex: this.resultFilters.sex,
-              interests: [this.resultFilters.interest],
-              age_tags: [this.resultFilters.age],
-              consider_options: this.resultFilters.considerations,
-              requirement: this.resultFilters.requirement || '',
+              sex: baseFilters.sex,
+              // [0923 수정] 선택한 관심분야 외에 '공통'도 항상 같이 보냄
+              interests: [baseFilters.interest, '공통'],
+              age_tags: [baseFilters.age],
+              // [0923 수정] 특이사항 목록 맨 뒤에 '공통'도 항상 추가
+              consider_options: [...baseFilters.considerations, '공통'],
+              requirement: baseFilters.requirement || '',
             })
             this.openingMsg.content = openingData.opening
           } catch (e) {
@@ -215,21 +234,24 @@ export default {
             this.$set(last, 'content', '(오프닝 멘트 생성 실패) 백엔드 서버 연결을 확인해주세요.')
             return
           }
-        } else if (this.submitType === 're') {
-          this.resultFilters.prev_speech = ''
         }
-        
+
         let hasError = false
-        await this.$stream.fetchStream(
+        // [0920 수정]
+        await fetchLocalStream(
+          this.streamControllers,
+          { channel: this.$store.state.device, nuxtError: this.$nuxt.error },
           '/taxurance/speech/make',
           {
-            sex: this.resultFilters.sex,
-            interests: [this.resultFilters.interest],
-            age_tags: [this.resultFilters.age],
-            consider_options: this.resultFilters.considerations,
+            sex: baseFilters.sex,
+            // [0923 수정] 선택한 관심분야 외에 '공통'도 항상 같이 보냄
+            interests: [baseFilters.interest, '공통'],
+            age_tags: [baseFilters.age],
+            // [0923 수정] 특이사항 목록 맨 뒤에 '공통'도 항상 추가
+            consider_options: [...baseFilters.considerations, '공통'],
             opening_result: this.openingMsg.content,
-            prev_speech: this.resultFilters.prev_speech || '',
-            requirement: this.resultFilters.requirement || '',
+            prev_speech: baseFilters.prev_speech || '',
+            requirement: baseFilters.requirement || '',
           },
           {
             onChunk: (chunk) => {
@@ -266,32 +288,54 @@ export default {
       }
     },
 
+    // [0920 수정] isTyping 가드 제거 - 오프닝 번역은 최종화법 스트리밍과 무관하게 동작해야 함
+    // [0920 수정] 같은 메시지(msg)에 번역이 이미 진행 중이면, 새 언어를 누르는 순간 이전 요청은
+    // 취소되고 새 요청으로 교체됨 (fetchLocalStreamReplacing이 msg를 key로 알아서 처리 -
+    // 예전 $stream이 fetchStream() 부를 때마다 이전 스트림을 끊던 동작과 같은 "교체" 느낌이지만,
+    // 이번엔 전역이 아니라 같은 메시지끼리만 영향 줌)
     async startTransStreaming(lang, msg) {
       this.$set(msg, 'isTrans', true)
-      this.$set(msg, 'transText', '') 
-      this.startFake() 
+      this.$set(msg, 'transText', '')
+      this.startFake()
 
-      this.$nextTick(() => this.scrollToBottom(false))
+      // 맨 아래(가장 최근) 메시지를 번역할 때만 바닥으로 스크롤한다. 오프닝 멘트(openingMsg,
+      // 항상 messages보다 위에 고정으로 뜸)나 messages 중 위쪽 메시지를 번역할 땐 스크롤하면
+      // 안 됨 - 그러면 방금 보고 있던 카드에서 눈을 뗀 채 엉뚱하게 맨 아래로 밀려버림.
+      const isLastMessage = msg === this.messages[this.messages.length - 1]
+      const scrollIfLast = () => {
+        if (isLastMessage) this.scrollToBottom(false)
+      }
+
+      this.$nextTick(scrollIfLast)
 
       const params = {
         language: lang,
         msg: msg.content,
       }
 
-      await this.$stream.fetchStream('/translation/chat/stream', params, {
-        onChunk: (chunk) => {
-          this.$set(msg, 'transText', msg.transText + chunk)
+      // [0920 수정]
+      await fetchLocalStreamReplacing(
+        this.streamControllers,
+        msg,
+        { channel: this.$store.state.device, nuxtError: this.$nuxt.error },
+        '/translation/chat/stream',
+        params,
+        {
+          onChunk: (chunk) => {
+            this.$set(msg, 'transText', msg.transText + chunk)
 
-          this.$nextTick(() => this.scrollToBottom(false))
-        },
-        onFinished: () => {
-          this.clearTicker()
-        },
-      })
+            this.$nextTick(scrollIfLast)
+          },
+          onFinished: () => {
+            this.clearTicker()
+          },
+        }
+      )
     },
 
+    // [0920 수정]
     stopStreaming() {
-      this.$stream.stop()
+      stopLocalStreams(this.streamControllers)
     },
 
     isMaxSelected(value) {
@@ -458,6 +502,13 @@ export default {
     delay(ms) {
       return new Promise((r) => setTimeout(r, ms))
     },
+    // [0927 수정] 화면 표시 전용 - "·" 바로 앞에 보이지 않는 Word Joiner(U+2060)를 끼워넣어서
+    // "·"이 앞 글자랑 떨어져 혼자 다음 줄로 넘어가지 않게 함. filters.interest/제출값은
+    // 그대로 두고(v-model="filters.interest"는 원본 interest를 그대로 씀) 이건 오직
+    // {{ }} 렌더링에만 씀 - "금융소득·자산관리" 하드코딩 분기 없이 "·"이 있는 라벨이면 전부 적용됨
+    glueDot(text) {
+      return text.replace('·', '⁠·')
+    },
   },
 }
 </script>
@@ -509,17 +560,42 @@ export default {
                   </div>
                 </div>
                 <div class="interest-header-row">
-                  <div class="wrap-label rd-st1 rd-st1--wrap">
-                    <label v-for="interest in interestOptions" :key="interest">
-                      <input
-                        type="radio"
-                        v-model="filters.interest"
-                        :value="interest"
-                        required
-                      />
-                      <p>{{ interest }}</p>
-                    </label>
-                  </div>
+                  <!-- [0927 수정] 모바일에서 라디오 4개가 두 줄로 어색하게 깨지던 문제 -
+                       move/CustomerProfileInterestSelector.vue의 아이콘 카드형 그리드 디자인으로 교체 -->
+                  <fieldset class="interest-picker" aria-required="true">
+                    <div class="interest-picker__grid">
+                      <label
+                        v-for="interest in interestOptions"
+                        :key="interest"
+                        class="interest-picker__option"
+                      >
+                        <input
+                          type="radio"
+                          v-model="filters.interest"
+                          :value="interest"
+                          required
+                        />
+                        <span class="interest-picker__surface">
+                          <span
+                            class="interest-picker__icon"
+                            :class="{
+                              'interest-picker__icon--inherit': interest === '상속',
+                              'interest-picker__icon--gift': interest === '증여',
+                              'interest-picker__icon--selfemployed': interest === '개인사업자',
+                              'interest-picker__icon--finance':
+                                !['상속', '증여', '개인사업자'].includes(interest),
+                            }"
+                            aria-hidden="true"
+                          ></span>
+                          <!-- [0927 수정] 강제 줄바꿈 대신 word-break: keep-all로 폭에 맞게
+                               자연스럽게 줄바꿈되도록 함 (너무 좁아지면 박스 밖으로 넘치던 문제 해결).
+                               glueDot()이 "·" 앞에 보이지 않는 줄바꿈 금지 문자를 넣어서, "·"이
+                               앞 글자와 떨어져 혼자 다음 줄로 떨어지지 않게 함 -->
+                          <span class="interest-picker__text">{{ glueDot(interest) }}</span>
+                        </span>
+                      </label>
+                    </div>
+                  </fieldset>
                   <button type="button" class="btn-type-survey" @click="openTypeModal">
                      관심분야를 추천해드릴까요?
                   </button>
@@ -596,7 +672,9 @@ export default {
                         :title="opt"
                         @click="toggleTypeAnswer(typeCurrentKey, optionLetters[idx])"
                       >
-                        <span>{{ optionLetters[idx] }}. {{ opt }}</span>
+                        <!-- [0921 수정] opt 문자열 자체가 이미 "A : ..." 형태로 알파벳을 포함하고
+                             있어서, optionLetters[idx]를 앞에 또 붙이면 "A. A : ..."처럼 중복됨 -->
+                        <span>{{ opt }}</span>
                       </label>
                     </div>
                     <div class="asset-survey-nav">
@@ -724,6 +802,8 @@ export default {
                     <p class="tit">
                       <i class="icon-s icon-trans"></i>번역하기
                     </p>
+                    <!-- [0920 수정] 최종화법 스트리밍(isTyping)과 무관하게 항상 클릭 가능.
+                         이미 번역 중이면 fetchLocalStreamReplacing이 이전 요청을 취소하고 교체함 -->
                     <div>
                       <button
                         v-for="(trans, idx) in transOptions"
@@ -744,7 +824,7 @@ export default {
                     />
                     <div
                       class="markdown-body"
-                      v-html="renderMarkdown(openingMsg.transText)"
+                      v-html="renderMarkdown(openingMsg.transText, true)"
                     ></div>
                   </div>
                 </div>
@@ -795,6 +875,8 @@ export default {
                         <i class="icon-s icon-trans"></i>번역하기
                       </p>
                       <!-- transOptions(언어 목록)만큼 번역 버튼을 렌더링, 클릭 시 startTransStreaming(언어, 메시지) 실행 -->
+                      <!-- [0920 수정] isTyping(다른 화법 생성 중) 가드 제거 - 번역 제한은 같은 메시지
+                           단위로만 걸림(fetchLocalStreamReplacing), 다른 화법 생성 중이어도 무관하게 동작 -->
                       <div>
                         <button
                           v-for="(trans, idx) in transOptions"
@@ -821,7 +903,7 @@ export default {
                       />
                       <div
                         class="markdown-body"
-                        v-html="renderMarkdown(msg.transText)"
+                        v-html="renderMarkdown(msg.transText, true)"
                       ></div>
                     </div>
                   </div>
@@ -1138,6 +1220,13 @@ export default {
 
 /* 오프닝 멘트 - 최종화법 카드(파란 헤더바+큰 그림자)보다 단순한 작은 카드.
    본문/번역하기 영역은 선(구분선) 대신 배경색 차이로만 구분, 색은 인디고 계열로 통일 */
+// AI가 리스트 항목을 <li>텍스트</li>(tight)로 만들 때도 있고 <li><p>텍스트</p></li>(loose)로
+// 만들 때도 있는데, github-markdown-css가 loose 쪽 <p>에는 문단 마진(16px)을 그대로
+// 적용해서 같은 리스트 안에서도 항목 간격이 들쭉날쭉해 보인다. .markdown-body는 화법
+// 본문/번역 어디서든 쓰이는 공용 클래스라 여기서 한 번에 눌러준다.
+.markdown-body li > p {
+  margin: 0;
+}
 .opening-ment {
   margin: rem(12) 0;
   border: 0.6px solid #dbeafe;
@@ -1196,6 +1285,11 @@ export default {
     border-radius: 12px;
     background-color: #f5f7ff;
     white-space: pre-line;
+    // marked가 블록 태그 사이에 넣는 개행(</p>\n<p>)이 pre-line 때문에 빈 줄로 보이던 문제 -
+    // 번역 마크다운은 원문과 같이 normal로 렌더링
+    .markdown-body {
+      white-space: normal;
+    }
   }
 }
 
@@ -1207,17 +1301,152 @@ export default {
   flex-wrap: wrap;
   gap: rem(12);
   width: 100%;
-  > .wrap-label {
-    // grow는 0으로 둬서 관심분야 라디오 그룹이 남는 공간을 채우려고 늘어나지 않게(고정 크기 유지).
-    // shrink는 허용하고, flex item의 기본 min-width:auto(내용 전체 너비가 최소 크기로 강제되는 것)만
-    // 0으로 풀어줘서, 진짜 폭이 부족할 때만 줄바꿈(2줄)되도록 함.
-    flex: 0 1 auto;
+  > .interest-picker {
+    // [0927 수정] flex-basis: auto로 두면 grid의 auto-fit이 폭을 제대로 못 읽어서
+    // 열이 1개로 무너지는 버그가 있어서, 항상 한 줄을 통째로 차지하게 고정
+    // (버튼은 자연스럽게 아래 줄로 감)
+    flex: 1 1 100%;
     min-width: 0;
   }
   > .btn-type-survey {
     flex-shrink: 0;
   }
 }
+
+// [0927 수정] move/CustomerProfileInterestSelector.vue의 관심분야 카드형 디자인을
+// 이식 (모바일 2x2 그리드로 가로 넘침 없이 안정적으로 배치됨)
+.interest-picker {
+  --interest-action: #6266d9;
+  --interest-action-strong: #536fc4;
+  --interest-selected-surface: linear-gradient(135deg, #f7f5ff 0%, #f4f7ff 100%);
+  --interest-text-secondary: #4b5563;
+  --interest-border: #d9dce9;
+  --interest-border-strong: #c9cddd;
+  --interest-surface: #fff;
+  --interest-disabled: #9ca3af;
+  --interest-radius: 14px;
+
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.interest-picker__grid {
+  display: grid;
+  // [0927 수정] auto-fit은 4개 항목 기준으로 "3+1"처럼 어색하게 쌓일 수 있어서,
+  // 2열 → 4열로 한 번에 점프하도록 명시적 분기 (3열은 아예 거침, 아래 미디어쿼리 참고)
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+.interest-picker__option {
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+
+  input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+.interest-picker__surface {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  // [0927 수정] 카드 높이 축소 (78px -> 58px)
+  min-height: 58px;
+  // [0927 수정] 아이콘+텍스트 가로 배치를 좁은 화면에서도 유지하려고 여백을 줄여 텍스트 공간 확보
+  padding: 8px 30px 8px 12px;
+  border: 1px solid var(--interest-border);
+  border-radius: var(--interest-radius);
+  background: var(--interest-surface);
+  color: var(--interest-text-secondary);
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease,
+    color 160ms ease, transform 160ms ease;
+}
+.interest-picker__icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+
+  &--inherit {
+    @include maskImages('icon-interest-inherit.svg', #9096a6);
+    -webkit-mask-image: url($imgUrl + 'icon-interest-inherit.svg');
+  }
+  &--gift {
+    @include maskImages('icon-interest-gift.svg', #9096a6);
+    -webkit-mask-image: url($imgUrl + 'icon-interest-gift.svg');
+  }
+  &--selfemployed {
+    @include maskImages('icon-interest-selfemployed.svg', #9096a6);
+    -webkit-mask-image: url($imgUrl + 'icon-interest-selfemployed.svg');
+  }
+  &--finance {
+    @include maskImages('icon-interest-finance.svg', #9096a6);
+    -webkit-mask-image: url($imgUrl + 'icon-interest-finance.svg');
+  }
+}
+.interest-picker__text {
+  min-width: 0;
+  color: inherit;
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 700;
+  text-align: center;
+  // [0927 수정] overflow-wrap: anywhere를 빼서 "개인사" / "업자"처럼 음절 중간이 잘리지 않게 함
+  // (word-break: keep-all만으로 "금융소득·자산관리"는 · 뒤에서 자연스럽게 줄바꿈됨)
+  word-break: keep-all;
+}
+  s
+.interest-picker__option:hover .interest-picker__surface {
+  border-color: #8b88e8;
+  transform: translateY(-1px);
+}
+.interest-picker__option input:focus-visible + .interest-picker__surface {
+  outline: none;
+  border-color: var(--interest-action);
+  box-shadow: 0 0 0 3px rgba(98, 102, 217, 0.2);
+}
+.interest-picker__option input:checked + .interest-picker__surface {
+  border-color: #7774e5;
+  background: var(--interest-selected-surface);
+  color: #4f55c7;
+  box-shadow: 0 7px 20px rgba(91, 106, 217, 0.12);
+
+  .interest-picker__icon {
+    background-color: var(--interest-action);
+  }
+  .interest-picker__check {
+    border-color: transparent;
+    background: linear-gradient(135deg, var(--interest-action), var(--interest-action-strong));
+
+    &::after {
+      background-color: #fff;
+    }
+  }
+}
+.interest-picker__option input:disabled + .interest-picker__surface {
+  border-color: #e2e4eb;
+  background: #f4f5f8;
+  color: var(--interest-disabled);
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
 .btn-type-survey {
   flex-shrink: 0;
   padding: 6px 14px;
